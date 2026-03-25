@@ -1,0 +1,140 @@
+/* Animated Background Styles */
+.animated-background {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Light mode gradient */
+.animated-background.light .background-gradient {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg,
+      #f8fafc 0%,
+      #e0e7ff 25%,
+      #f0f9ff 50%,
+      #ecfdf5 75%,
+      #faf5ff 100%
+    );
+  background-size: 400% 400%;
+  animation: gradientShift 20s ease infinite;
+}
+
+/* Dark mode gradient */
+.animated-background.dark .background-gradient {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg,
+      #0f172a 0%,
+      #1e1b4b 25%,
+      #0c1222 50%,
+      #1a1a2e 75%,
+      #0f172a 100%
+    );
+  background-size: 400% 400%;
+  animation: gradientShift 20s ease infinite;
+}
+
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Symbols container */
+.symbols-container {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* Vignette overlay for depth */
+.vignette-overlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 0%,
+    transparent 50%,
+    rgba(0, 0, 0, 0.05) 100%
+  );
+  pointer-events: none;
+}
+
+.animated-background.dark .vignette-overlay {
+  background: radial-gradient(
+    ellipse at center,
+    transparent 0%,
+    transparent 40%,
+    rgba(0, 0, 0, 0.3) 100%
+  );
+}
+
+/* Grid pattern animation */
+.grid-pattern {
+  animation: gridPulse 10s ease-in-out infinite;
+}
+
+@keyframes gridPulse {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+/* Floating symbol base styles */
+.floating-symbol {
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+}
+
+/* Glowing orb styles */
+.glowing-orb {
+  backface-visibility: hidden;
+}
+
+/* Performance optimizations */
+@media (prefers-reduced-motion: reduce) {
+  .animated-background * {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .floating-symbol {
+    display: none;
+  }
+
+  .glowing-orb {
+    animation: none !important;
+  }
+}
+
+/* Mobile optimizations - reduce symbols for performance */
+@media (max-width: 768px) {
+  .floating-symbol:nth-child(n+15) {
+    display: none;
+  }
+
+  .glowing-orb {
+    filter: blur(30px);
+  }
+}
+
+/* Tablet optimizations */
+@media (max-width: 1024px) {
+  .floating-symbol:nth-child(n+20) {
+    display: none;
+  }
+}

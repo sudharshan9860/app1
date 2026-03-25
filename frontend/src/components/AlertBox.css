@@ -1,0 +1,195 @@
+/* =========================================
+   ALERT BOX STYLES
+   ========================================= */
+
+.alert-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.alert-box {
+  padding: 16px 24px;
+  border-radius: 12px;
+  color: white;
+  font-weight: 500;
+  font-size: 14px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 300px;
+  max-width: 500px;
+  opacity: 0;
+  transform: translateX(100%) scale(0.95);
+  transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+  pointer-events: auto;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.alert-box.show {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+}
+
+.alert-box.hide {
+  opacity: 0;
+  transform: translateX(100%) scale(0.95);
+}
+
+/* Alert Types */
+.alert-box.success {
+  background: linear-gradient(135deg, #2ecc71, #27ae60);
+  border-left: 4px solid #1e8449;
+}
+
+.alert-box.error {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  border-left: 4px solid #922b21;
+}
+
+.alert-box.warning {
+  background: linear-gradient(135deg, #f39c12, #e67e22);
+  border-left: 4px solid #b9770e;
+}
+
+.alert-box.info {
+  background: linear-gradient(135deg, #3498db, #2980b9);
+  border-left: 4px solid #1f618d;
+}
+
+/* Alert Message */
+.alert-message {
+  flex: 1;
+  line-height: 1.4;
+  word-wrap: break-word;
+}
+
+/* Close Button */
+.alert-box .close-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.alert-box .close-btn:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.1);
+  transform: scale(1.1);
+}
+
+.alert-box .close-btn:active {
+  transform: scale(0.95);
+}
+
+/* Progress Bar */
+.alert-box::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 0 0 12px 12px;
+  animation: progressBar 4s linear forwards;
+}
+
+@keyframes progressBar {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+/* Auto-hide alerts don't show progress bar */
+.alert-box[data-auto-hide="false"]::after {
+  display: none;
+}
+
+/* Dark theme support */
+body.dark .alert-box {
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .alert-container {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+  }
+  
+  .alert-box {
+    min-width: auto;
+    max-width: none;
+    margin: 0;
+    font-size: 13px;
+    padding: 14px 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .alert-container {
+    top: 5px;
+    right: 5px;
+    left: 5px;
+  }
+  
+  .alert-box {
+    padding: 12px 16px;
+    font-size: 12px;
+  }
+  
+  .alert-box .close-btn {
+    width: 20px;
+    height: 20px;
+    font-size: 14px;
+  }
+}
+
+/* Accessibility */
+.alert-box:focus-within {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: 2px;
+}
+
+/* Multiple alerts stacking */
+.alert-container .alert-box:nth-child(n+2) {
+  margin-top: -2px;
+  transform: translateX(100%) scale(0.95);
+}
+
+.alert-container .alert-box:nth-child(n+2).show {
+  transform: translateX(0) scale(0.98);
+}
+
+.alert-container .alert-box:nth-child(n+3) {
+  opacity: 0.9;
+}
+
+.alert-container .alert-box:nth-child(n+4) {
+  opacity: 0.8;
+}
+
+.alert-container .alert-box:nth-child(n+5) {
+  display: none;
+}

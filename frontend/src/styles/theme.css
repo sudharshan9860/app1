@@ -1,0 +1,125 @@
+/* ========================================
+   THEME - Global styles with 3-color scheme
+   Black: #0B1120 | White: #FFFFFF | Blue: #00A0E3
+   ======================================== */
+
+/* These global styles serve as fallback for any components
+   still using Bootstrap or legacy CSS classes.
+   Primary styling should be done via Tailwind utility classes. */
+
+/* Form Controls */
+.form-control {
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s ease;
+  font-size: 0.875rem;
+}
+
+.form-control:focus {
+  border-color: #00A0E3;
+  box-shadow: 0 0 0 3px rgba(0, 160, 227, 0.1);
+  outline: none;
+}
+
+/* Progress Bars */
+.progress {
+  height: 8px;
+  border-radius: 4px;
+  background: #f3f4f6;
+  overflow: hidden;
+}
+
+.progress-bar {
+  background: #00A0E3 !important;
+  transition: width 1s ease-in-out;
+}
+
+/* Cards */
+.card {
+  border: 1px solid #f3f4f6;
+  border-radius: 0.75rem;
+  background: white;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* Bootstrap button overrides */
+.btn-primary {
+  background: #00A0E3 !important;
+  border-color: #00A0E3 !important;
+  color: white !important;
+}
+
+.btn-primary:hover {
+  background: #0080B8 !important;
+  border-color: #0080B8 !important;
+}
+
+.btn-outline-primary {
+  color: #00A0E3 !important;
+  border-color: #00A0E3 !important;
+  background: transparent !important;
+}
+
+.btn-outline-primary:hover {
+  background: #00A0E3 !important;
+  color: white !important;
+}
+
+/* Nav tabs */
+.nav-tabs {
+  border: none;
+  margin-bottom: 1rem;
+}
+
+.nav-tabs .nav-link {
+  border: none;
+  color: #6b7280;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.nav-tabs .nav-link:hover {
+  background: rgba(0, 160, 227, 0.05);
+  color: #00A0E3;
+}
+
+.nav-tabs .nav-link.active {
+  background: #00A0E3;
+  color: white !important;
+}
+
+/* Notification badge */
+.notification-badge {
+  background: #00A0E3 !important;
+}
+
+.unread-notification {
+  background-color: rgba(0, 160, 227, 0.08);
+  font-weight: 600;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .card {
+    margin-bottom: 1rem;
+  }
+}

@@ -1,0 +1,386 @@
+/* src/components/shared/QuestionEvaluationCard.css */
+
+/* Main Card Container */
+.question-card {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  transition: all 0.3s ease;
+}
+
+.question-card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+/* Header Section */
+.question-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  color: white;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.question-number1 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.3);
+  border-radius: 25px;
+  padding: 1vw;
+}
+
+.question-marks1 {
+  font-size: 1rem;
+  font-weight: 700;
+   color: #ffffff;
+  box-shadow: 0 2px 8px rgba(244, 244, 244, 0.3);
+  border-radius: 25px;
+  padding: 1vw;
+}
+
+.question-percentage {
+  font-size: 0.95rem;
+  font-weight: 600;
+  opacity: 0.9;
+   box-shadow: 0 2px 8px rgba(244, 244, 244, 0.3);
+  border-radius: 25px;
+  padding: 1vw;
+}
+
+.diagram-indicator {
+  font-size: 1.1rem;
+  opacity: 0.9;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+}
+
+.status-label {
+  white-space: nowrap;
+   box-shadow: 0 2px 8px rgba(244, 244, 244, 0.3);
+  border-radius: 25px;
+  padding: 1vw;
+}
+
+/* Body Section */
+.question-body {
+  padding: 1.25rem;
+}
+
+/* Question Text Section */
+.question-text-section {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 2px solid #f3f4f6;
+}
+
+.section-label {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 0.75rem 0;
+}
+
+.question-text {
+  font-size: 0.975rem;
+  color: #1f2937;
+  line-height: 1.7;
+  margin: 0;
+}
+
+/* Info Sections */
+.info-section {
+  margin-bottom: 1rem;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.section-header-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem 1rem;
+  font-weight: 700;
+}
+
+.section-icon {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.section-heading {
+  font-size: 0.925rem;
+  font-weight: 700;
+  margin: 0;
+  color: #1f2937;
+}
+
+.section-content-box {
+  padding: 1rem;
+  background: white;
+}
+
+.section-text {
+  font-size: 0.9rem;
+  color: #374151;
+  line-height: 1.65;
+  margin: 0;
+}
+
+/* Mistakes Section */
+.mistakes-section .section-header-bar {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border-bottom: 2px solid #fecaca;
+}
+
+.mistakes-section .section-content-box {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-top: none;
+}
+
+.mistake-meta {
+  margin-top: 0.625rem;
+  padding-top: 0.625rem;
+  border-top: 1px solid #fecaca;
+  font-size: 0.85rem;
+  color: #991b1b;
+}
+
+.mistake-meta strong {
+  font-weight: 700;
+}
+
+/* Gap Analysis Section */
+.gap-section .section-header-bar {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border-bottom: 2px solid #fde68a;
+}
+
+.gap-section .section-content-box {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-top: none;
+}
+
+/* Concepts Section */
+.concepts-section .section-header-bar {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border-bottom: 2px solid #bfdbfe;
+}
+
+.concepts-section .section-content-box {
+  background: #f0f9ff;
+  border: 1px solid #bfdbfe;
+  border-top: none;
+}
+
+/* Concepts Grid */
+.concepts-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.concept-card {
+  background: white;
+  padding: 0.875rem 1rem;
+  border-radius: 8px;
+  border-left: 4px solid #3b82f6;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.concept-card:hover {
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+  transform: translateX(4px);
+}
+
+.concept-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.concept-bullet {
+  color: #3b82f6;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.concept-name {
+  font-size: 0.925rem;
+  font-weight: 700;
+  color: #1e40af;
+  line-height: 1.4;
+}
+
+.concept-desc {
+  font-size: 0.875rem;
+  color: #4b5563;
+  line-height: 1.6;
+  margin: 0;
+  padding-left: 1.375rem;
+}
+
+/* Success Banner */
+.success-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.875rem 1.125rem;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 2px solid #86efac;
+  border-radius: 8px;
+  color: #166534;
+  font-size: 0.925rem;
+  font-weight: 600;
+  margin-top: 1rem;
+}
+
+.success-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.success-text {
+  flex: 1;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .question-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.875rem 1rem;
+  }
+
+  .header-left {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .header-right {
+    width: 100%;
+  }
+
+  .status-label {
+    width: 100%;
+    text-align: center;
+    display: block;
+  }
+
+  .question-body {
+    padding: 1rem;
+  }
+
+  .question-number {
+    font-size: 1rem;
+  }
+
+  .question-marks {
+    font-size: 1.1rem;
+  }
+
+  .question-percentage {
+    font-size: 0.875rem;
+  }
+
+  .question-text {
+    font-size: 0.9rem;
+  }
+
+  .section-heading {
+    font-size: 0.875rem;
+  }
+
+  .section-text {
+    font-size: 0.85rem;
+  }
+
+  .concept-name {
+    font-size: 0.875rem;
+  }
+
+  .concept-desc {
+    font-size: 0.825rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .question-card {
+    margin-bottom: 1rem;
+  }
+
+  .question-card-header {
+    padding: 0.75rem;
+  }
+
+  .question-body {
+    padding: 0.875rem;
+  }
+
+  .header-left {
+    gap: 0.5rem;
+    font-size: 0.9rem;
+  }
+
+  .question-marks {
+    font-size: 1rem;
+  }
+
+  .section-header-bar {
+    padding: 0.625rem 0.875rem;
+  }
+
+  .section-content-box {
+    padding: 0.875rem;
+  }
+
+  .concept-card {
+    padding: 0.75rem 0.875rem;
+  }
+
+  .concept-desc {
+    padding-left: 1.125rem;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .question-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    box-shadow: none;
+    border: 1px solid #e5e7eb;
+    margin-bottom: 1rem;
+  }
+
+  .question-card:hover {
+    transform: none;
+  }
+
+  .concept-card:hover {
+    transform: none;
+  }
+}

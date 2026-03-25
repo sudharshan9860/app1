@@ -1,0 +1,30 @@
+server {
+    server_name dev.smartlearners.ai;
+
+    # This line is rewritten by the deploy pipeline on every deployment
+    root /var/www/app1_react_project/build1;
+    index index.html;
+
+    location / {
+        try_files $uri /index.html;
+    }
+
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/dev.smartlearners.ai/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/dev.smartlearners.ai/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+
+}
+server {
+    if ($host = dev.smartlearners.ai) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+
+    listen 80;
+    server_name dev.smartlearners.ai;
+    return 404; # managed by Certbot
+
+
+}

@@ -1,0 +1,127 @@
+@keyframes pulse {
+    0% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.05);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+  
+  @keyframes shine {
+    0% {
+      background-position: -200px 0;
+    }
+    100% {
+      background-position: calc(200px + 100%) 0;
+    }
+  }
+  
+  @keyframes gradientFlow {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+  
+  .leaderboard-container {
+    background: linear-gradient(
+      45deg, 
+      rgba(0,193,212,0.1), 
+      rgba(0,27,108,0.1), 
+      rgba(0,193,212,0.1)
+    );
+    background-size: 400% 400%;
+    animation: gradientFlow 15s ease infinite;
+    border-radius: 15px;
+    box-shadow: 0 10px 25px rgba(0,193,212,0.2);
+    transition: all 0.3s ease;
+  }
+  
+  .leaderboard-entry {
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .leaderboard-entry:hover {
+    animation: pulse 0.5s ease;
+    background: linear-gradient(
+      to right, 
+      rgba(0,193,212,0.05), 
+      rgba(0,27,108,0.05)
+    );
+    box-shadow: 0 5px 15px rgba(0,193,212,0.1);
+  }
+  
+  .top-three-badge {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(
+      45deg, 
+      #FFD700, 
+      #FFA500
+    );
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-weight: bold;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    transform: rotate(15deg);
+  }
+  
+  .top-three-badge.gold {
+    background: linear-gradient(45deg, #FFD700, #DAA520);
+  }
+  
+  .top-three-badge.silver {
+    background: linear-gradient(45deg, #C0C0C0, #708090);
+  }
+  
+  .top-three-badge.bronze {
+    background: linear-gradient(45deg, #CD7F32, #8B4513);
+  }
+  
+  .rank-badge {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(
+      45deg, 
+      rgba(0,193,212,0.8), 
+      rgba(0,27,108,0.8)
+    );
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  }
+  
+  .points-shine {
+    background: linear-gradient(
+      to right, 
+      #001B6C 0%, 
+      #00C1D4 50%, 
+      #001B6C 100%
+    );
+    background-size: 200px 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    animation: shine 1.5s infinite linear;
+  }

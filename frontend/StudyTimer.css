@@ -1,0 +1,38 @@
+.study-timer {
+    display: inline-flex;
+    align-items: center;
+    background: linear-gradient(135deg, #00c1d4, #001b6c);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 20px;
+    box-shadow: 0 2px 8px rgba(0, 27, 108, 0.2);
+    font-weight: 600;
+    font-size: 14px;
+    margin-right: 10px;
+    animation: pulse 2s infinite ease-in-out;
+  }
+  
+  .study-timer.stopped {
+    background: #6c757d;
+    animation: none;
+  }
+  
+  .timer-icon {
+    margin-right: 8px;
+  }
+  
+  .timer-display {
+    font-family: 'Courier New', monospace;
+  }
+  
+  @keyframes pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(0, 193, 212, 0.4);
+    }
+    70% {
+      box-shadow: 0 0 0 6px rgba(0, 193, 212, 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(0, 193, 212, 0);
+    }
+  }

@@ -1019,7 +1019,7 @@ export default function StudentWizard({
     <div
       style={{
         width: "100%",
-        maxWidth: 680,
+        maxWidth: "100%",
         margin: "0 auto",
         fontFamily: "inherit",
       }}

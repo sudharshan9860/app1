@@ -17,10 +17,9 @@ import {
   Sun,
   Moon,
   Calendar,
+  Flame,
 } from "lucide-react";
 import UnifiedSessions from "./UnifiedSessions";
-import StreakTracker from "./StreakTracker";
-import LiveNotifications from "./LiveNotifications";
 import Tutorial from "./Tutorial";
 import { useTutorial } from "../contexts/TutorialContext";
 import FeedbackBox from "./FeedbackBox";
@@ -48,6 +47,16 @@ function StudentDash({ jeeMode = false }) {
   // Dark mode state with improved persistence
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return localStorage.getItem("darkMode") === "true";
+  });
+
+  // Inline streak state — reads same localStorage key as StreakTracker
+  const [inlineStreak, setInlineStreak] = useState(() => {
+    try {
+      const stored = localStorage.getItem(`streak_${username}`);
+      return stored ? JSON.parse(stored).currentStreak || 0 : 0;
+    } catch {
+      return 0;
+    }
   });
 
   // State for dropdown data
@@ -538,8 +547,7 @@ function StudentDash({ jeeMode = false }) {
               const sn = subject.subject_name.toLowerCase();
               if (
                 isFoundationClass &&
-                (sn.includes("jee_foundation") ||
-                  sn.includes("jee foundation"))
+                (sn.includes("jee_foundation") || sn.includes("jee foundation"))
               ) {
                 return true;
               }
@@ -1276,17 +1284,21 @@ function StudentDash({ jeeMode = false }) {
       <div className={isDarkMode ? "dark" : ""}>
         <div className="py-4 sm:py-6 px-3 sm:px-6 max-w-[1400px] mx-auto">
           {/* Grid: Main + Sidebar */}
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
-
+          <div className="grid grid-cols-1 gap-6">
+            {" "}
             {/* ── Main Content ── */}
             <div className="space-y-6">
-
               {/* Greeting Header */}
               <div className="greeting-content flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
                 <div className="greeting-text">
-                  <h1 className="text-xl sm:text-2xl font-bold text-[#0B1120] flex items-center gap-2">
+                  <h1 className="text-xl sm:text-2xl font-bold text-[#0B1120] flex items-center gap-2 flex-wrap">
                     {getTimeBasedGreeting()},{" "}
                     {localStorage.getItem("fullName") || username}!
+                    {/* Inline streak badge */}
+                    <span className="inline-flex items-center gap-1 text-sm font-semibold px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-600 border border-orange-200">
+                      <Flame className="w-4 h-4 text-orange-500" />
+                      {inlineStreak} day streak
+                    </span>
                   </h1>
                   <p
                     className={`text-sm font-semibold mt-1.5 ${
@@ -1344,92 +1356,38 @@ function StudentDash({ jeeMode = false }) {
                 />
               </div>
 
-              {/* Recent Sessions */}
-              {role === "student" && <UnifiedSessions />}
-            </div>
-
-            {/* ── Right Sidebar ── */}
-            <div className="space-y-5">
-              <StreakTracker />
-              <LiveNotifications />
-
-              {/* Resume Learning Card */}
+              {/* Resume Learning Card — moved from sidebar */}
               {canResume && lastSession && (
-                <div className="resume-learning-section relative overflow-hidden rounded-2xl p-5 border-2 border-[#00A0E3]/30 bg-gradient-to-br from-[#00A0E3] to-[#0070C0] shadow-lg shadow-[#00A0E3]/20 flex flex-col min-h-[280px]">
+                <div className="resume-learning-section relative overflow-hidden rounded-2xl p-5 border-2 border-[#00A0E3]/30 bg-gradient-to-br from-[#00A0E3] to-[#0070C0] shadow-lg shadow-[#00A0E3]/20 flex flex-col">
                   {/* Glow orb */}
                   <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/10 rounded-full blur-3xl" />
-
-                  <div className="relative z-10 flex-1 flex flex-col overflow-hidden">
-                    <div className="flex items-center gap-3 mb-3 text-white">
+                  <div className="relative z-10 flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div className="flex items-center gap-3 text-white">
                       <Rocket className="w-5 h-5 animate-pulse" />
                       <span className="text-lg font-bold">
                         Continue Learning
                       </span>
                     </div>
-
-                    <div className="text-white/90 text-sm space-y-2 flex-1">
-                      <div className="flex items-center gap-2">
-                        <BookOpen className="w-4 h-4 flex-shrink-0" />
-                        <span>
-                          <strong>Subject:</strong>{" "}
-                          {lastSession.subject_name || "Unknown"}
-                        </span>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <List className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                        <span>
-                          <strong>Chapter:</strong>{" "}
-                          {lastSession.chapter_names?.length > 0 ? (
-                            <>
-                              {lastSession.chapter_names[0]}
-                              {lastSession.chapter_names.length > 1 &&
-                                ` (+${lastSession.chapter_names.length - 1} more)`}
-                            </>
-                          ) : (
-                            "N/A"
-                          )}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <ClipboardList className="w-4 h-4 flex-shrink-0" />
-                        <span>
-                          <strong>Progress:</strong> Question{" "}
-                          {lastSession.questionNumber} of{" "}
-                          {lastSession.questionList?.length || 0}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 flex-shrink-0" />
-                        <span>
-                          <strong>Last active:</strong>{" "}
-                          {new Date(lastSession.timestamp).toLocaleDateString(
-                            "en-US",
-                            {
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            },
-                          )}
-                        </span>
-                      </div>
+                    <div className="text-white/90 text-sm flex flex-wrap gap-4 flex-1">
+                      <span>
+                        <strong>Subject:</strong>{" "}
+                        {lastSession.subject_name || "Unknown"}
+                      </span>
+                      <span>
+                        <strong>Chapter:</strong>{" "}
+                        {lastSession.chapter_names?.length > 0
+                          ? lastSession.chapter_names[0]
+                          : "N/A"}
+                      </span>
+                      <span>
+                        <strong>Progress:</strong> Q{lastSession.questionNumber}{" "}
+                        of {lastSession.questionList?.length || 0}
+                      </span>
                     </div>
-
-                    {/* Progress bar */}
-                    <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden mt-4 mb-4">
-                      <div
-                        className="h-full bg-gradient-to-r from-emerald-300 to-emerald-500 rounded-full transition-all duration-300"
-                        style={{
-                          width: `${(lastSession.questionNumber / (lastSession.questionList?.length || 1)) * 100}%`,
-                        }}
-                      />
-                    </div>
-
-                    {/* Buttons */}
-                    <div className="flex gap-2.5">
+                    <div className="flex gap-2.5 shrink-0">
                       <button
                         onClick={handleResumeLearning}
-                        className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 bg-white text-[#00A0E3] font-bold text-sm rounded-xl shadow-md hover:-translate-y-0.5 hover:shadow-lg transition-all duration-200"
+                        className="flex items-center justify-center gap-2 py-2.5 px-4 bg-white text-[#00A0E3] font-bold text-sm rounded-xl shadow-md hover:-translate-y-0.5 hover:shadow-lg transition-all duration-200"
                       >
                         <Rocket className="w-4 h-4" />
                         Resume
@@ -1449,6 +1407,9 @@ function StudentDash({ jeeMode = false }) {
                   </div>
                 </div>
               )}
+
+              {/* Recent Sessions */}
+              {role === "student" && <UnifiedSessions />}
             </div>
           </div>
         </div>

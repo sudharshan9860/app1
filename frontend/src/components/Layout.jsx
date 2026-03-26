@@ -186,7 +186,7 @@ const Layout = ({ children }) => {
       icon: "graduation-cap",
       isJEE: true,
     },
-    { path: "/quiz-mode", label: "Test Prep", icon: "trophy" },
+    { path: "/quiz-mode", label: "Pre Assessment", icon: "trophy" },
     // { path: '/analytics', label: 'Analytics', icon: 'chart-line' },
   ];
 
@@ -330,19 +330,24 @@ const Layout = ({ children }) => {
           </button>
 
           {/* Conditional Logo Rendering */}
-          {(window.location.hostname === "mynelo.in" || window.location.hostname === "www.mynelo.in") ? (
+          {window.location.hostname === "mynelo.in" ||
+          window.location.hostname === "www.mynelo.in" ? (
             /* MyNELO logo with glowing white backdrop so dark text stays visible */
             <div
               className="relative z-10 flex items-center justify-center"
               style={{
                 borderRadius: "16px",
-                
               }}
             >
               <img
                 src="/images/mynelo-logo1.png"
                 alt="MyNelo"
-                style={{ width: "25vw", height: "auto", objectFit: "contain", display: "block" }}
+                style={{
+                  width: "25vw",
+                  height: "auto",
+                  objectFit: "contain",
+                  display: "block",
+                }}
               />
             </div>
           ) : (
@@ -506,7 +511,10 @@ const Layout = ({ children }) => {
         isOpen={showFeedback}
         onClose={() => setShowFeedback(false)}
       />
-      {role === "student" && !trialDismissed && window.location.hostname !== 'mynelo.in' && window.location.hostname !== 'www.mynelo.in' && <TrialModal />}
+      {role === "student" &&
+        !trialDismissed &&
+        window.location.hostname !== "mynelo.in" &&
+        window.location.hostname !== "www.mynelo.in" && <TrialModal />}
 
       {/* Edit Profile Modal */}
       {showEditProfile && (

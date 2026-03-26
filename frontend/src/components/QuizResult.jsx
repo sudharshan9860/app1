@@ -185,6 +185,9 @@ const QuizResult = () => {
   const bridgeDetails = evalData.ai_bridge_evaluations || [];
   const conceptDetails = evalData.concept_details || [];
 
+  const isJeeFoundation = state?.isJeeFoundation || false;
+  const jeeDifficulty = state?.jeeDifficulty || null; // "Easy" | "Medium" | "Hard" | null
+
   const remedialPlanRaw = evalData.remedial_plan;
   const isRemedialObj = remedialPlanRaw && typeof remedialPlanRaw === "object";
   const foundationRepairs = isRemedialObj
@@ -240,6 +243,53 @@ const QuizResult = () => {
     total: v.total,
     score_pct: v.total ? Math.round((v.correct / v.total) * 100) : 0,
   }));
+
+  const DIFFICULTY_PROGRESSION = {
+    null: "Easy",
+    Easy: "Medium",
+    Medium: "Hard",
+    Hard: null,
+  };
+
+  const nextDifficulty = DIFFICULTY_PROGRESSION[String(jeeDifficulty)];
+
+  const handleNextLevel = async () => {
+    if (!nextDifficulty) return; // already at Hard — no next level
+    setRetakeLoading(true);
+    setRetakeError("");
+    try {
+      const chaptersForNext = state?.selectedChapters || [];
+      const res = await generateQuestions({
+        class_num: Number(classNum),
+        chapters: chaptersForNext,
+        questions_per_chapter: state?.questionsPerChapter || 5,
+        subject: "JEE_FOUNDATION_MATH",
+        difficulty_level: nextDifficulty,
+        ...(state?.selectedSubtopics?.length > 0 && {
+          sub_topics: state.selectedSubtopics,
+        }),
+      });
+      navigate("/quiz-question", {
+        state: {
+          quizData: res.data,
+          classNum: Number(classNum),
+          selectedChapters: chaptersForNext,
+          questionsPerChapter: state?.questionsPerChapter || 5,
+          subject: "JEE_FOUNDATION_MATH",
+          selectedSubtopics: state?.selectedSubtopics || [],
+          isJeeFoundation: true,
+          jeeDifficulty: nextDifficulty,
+        },
+      });
+    } catch (err) {
+      setRetakeError(
+        err.response?.data?.detail ||
+          "Failed to generate next level questions.",
+      );
+    } finally {
+      setRetakeLoading(false);
+    }
+  };
 
   /* ── state ── */
   const [showFullRemedial, setShowFullRemedial] = useState(false);
@@ -1914,8 +1964,175 @@ const QuizResult = () => {
         )}
 
         {/* ════ Score-Gated Actions ════ */}
-        {scorePct >= 60 || !isRetake ? (
-          /* ─── PASS or 1st attempt: Self Study Unlocked ──────────────── */
+        {isJeeFoundation ? (
+          /* ─── JEE Foundation result card ──────────────────────────── */
+          <motion.div
+            className="qr-selfstudy-banner"
+            initial={{ opacity: 0, y: 24, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.55, type: "spring", stiffness: 90 }}
+          >
+            {/* Level badge */}
+            <div style={{ marginBottom: 8 }}>
+              {jeeDifficulty === "Easy" && (
+                <span className="jee-result-badge easy">Level 1 — Easy</span>
+              )}
+              {jeeDifficulty === "Medium" && (
+                <span className="jee-result-badge medium">
+                  Level 2 — Medium
+                </span>
+              )}
+              {jeeDifficulty === "Hard" && (
+                <span className="jee-result-badge hard">Level 3 — Hard</span>
+              )}
+              {!jeeDifficulty && (
+                <span className="jee-result-badge mixed">Mixed</span>
+              )}
+            </div>
+
+            <div className="qr-ss-trophy">{scorePct >= 60 ? "🏆" : "📖"}</div>
+            <h2 className="qr-ss-title">Test Completed!</h2>
+            <p className="qr-ss-score">
+              You scored <strong>{Number(scorePct).toFixed(0)}%</strong>
+            </p>
+
+            {scorePct >= 60 && nextDifficulty ? (
+              /* Pass + next level exists → advance */
+              <>
+                <p className="qr-ss-message">
+                  Great work! You've cleared this level.
+                  <br />
+                  Ready to move up to{" "}
+                  <strong>
+                    {nextDifficulty === "Medium"
+                      ? "Level 2 — Medium"
+                      : "Level 3 — Hard"}
+                  </strong>
+                  ?
+                </p>
+                <div className="qr-ss-actions">
+                  <button
+                    className="qr-ss-btn primary"
+                    onClick={handleNextLevel}
+                    disabled={retakeLoading}
+                  >
+                    {retakeLoading
+                      ? "Preparing…"
+                      : `⬆️ Go to ${nextDifficulty}`}
+                  </button>
+                  <button
+                    className="qr-ss-btn secondary"
+                    onClick={() => navigate("/quiz-mode")}
+                  >
+                    🔄 Try Another Chapter
+                  </button>
+                  <button className="qr-ss-btn secondary" onClick={downloadPDF}>
+                    📥 Download Report
+                  </button>
+                </div>
+              </>
+            ) : scorePct >= 60 && !nextDifficulty ? (
+              /* Pass + already at Hard → mastery complete */
+              <>
+                <p className="qr-ss-message">
+                  🎉 Excellent! You've mastered all difficulty levels for these
+                  chapters!
+                </p>
+                <div className="qr-ss-actions">
+                  <button
+                    className="qr-ss-btn primary"
+                    onClick={() => navigate("/quiz-mode")}
+                  >
+                    🔄 Try Another Chapter
+                  </button>
+                  <button className="qr-ss-btn secondary" onClick={downloadPDF}>
+                    📥 Download Report
+                  </button>
+                </div>
+              </>
+            ) : (
+              /* Score ≤ 60 → retry same level */
+              <>
+                <p className="qr-ss-message">
+                  Score 60% or above to unlock the next level.
+                  <br />
+                  Review the concepts below and try again.
+                </p>
+                <div className="qr-ss-actions">
+                  <button
+                    className="qr-ss-btn primary"
+                    onClick={async () => {
+                      setRetakeLoading(true);
+                      setRetakeError("");
+                      try {
+                        const res = await generateQuestions({
+                          class_num: Number(classNum),
+                          chapters: state?.selectedChapters || [],
+                          questions_per_chapter:
+                            state?.questionsPerChapter || 5,
+                          subject: "JEE_FOUNDATION_MATH",
+                          ...(jeeDifficulty && {
+                            difficulty_level: jeeDifficulty,
+                          }),
+                          ...(state?.selectedSubtopics?.length > 0 && {
+                            sub_topics: state.selectedSubtopics,
+                          }),
+                        });
+                        navigate("/quiz-question", {
+                          state: {
+                            quizData: res.data,
+                            classNum: Number(classNum),
+                            selectedChapters: state?.selectedChapters || [],
+                            questionsPerChapter:
+                              state?.questionsPerChapter || 5,
+                            subject: "JEE_FOUNDATION_MATH",
+                            selectedSubtopics: state?.selectedSubtopics || [],
+                            isJeeFoundation: true,
+                            jeeDifficulty: jeeDifficulty,
+                          },
+                        });
+                      } catch (err) {
+                        setRetakeError(
+                          err.response?.data?.detail ||
+                            "Failed to regenerate questions.",
+                        );
+                      } finally {
+                        setRetakeLoading(false);
+                      }
+                    }}
+                    disabled={retakeLoading}
+                  >
+                    {retakeLoading
+                      ? "Preparing…"
+                      : "🔁 Practise More at This Level"}
+                  </button>
+                  <button
+                    className="qr-ss-btn secondary"
+                    onClick={() => navigate("/quiz-mode")}
+                  >
+                    🏠 Back to Test Prep
+                  </button>
+                  <button className="qr-ss-btn secondary" onClick={downloadPDF}>
+                    📥 Download Report
+                  </button>
+                </div>
+              </>
+            )}
+
+            {retakeError && (
+              <p
+                style={{ color: "#ef4444", marginTop: 12, fontSize: "0.85rem" }}
+              >
+                {retakeError}
+              </p>
+            )}
+
+            <p className="qr-ss-footnote">
+              JEE Foundation — Level 1 Easy → Level 2 Medium → Level 3 Hard
+            </p>
+          </motion.div>
+        ) : scorePct >= 60 || !isRetake ? (
+          /* ─── Board: PASS or 1st attempt: Self Study Unlocked ──────────────── */
           <motion.div
             className="qr-selfstudy-banner"
             initial={{ opacity: 0, y: 24, scale: 0.97 }}
@@ -1999,7 +2216,7 @@ const QuizResult = () => {
                   disabled={retakeLoading}
                   style={{ marginTop: 4 }}
                 >
-                  {retakeLoading ? "Preparing…" : "🔁 Retake to Improve Score"}
+                  {retakeLoading ? "Preparing…" : "🔁 Retry This Level"}
                 </button>
               )}
             </div>
@@ -2009,53 +2226,8 @@ const QuizResult = () => {
             </p>
           </motion.div>
         ) : (
-          /* ─── FAIL: Retake Card + Original Buttons ───────────────────── */
+          /* ─── Board: FAIL: Retake Card + Original Buttons ───────────────────── */
           <>
-            {/* Retake Card
-            <motion.div
-              className="qr-retake-card"
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45 }}
-            >
-              <div className="qr-retake-left">
-                <span className="qr-retake-icon">🔁</span>
-                <div>
-                  <h3 className="qr-retake-title">Retake This Test</h3>
-                  <p className="qr-retake-sub">
-                    You scored <strong>{Number(scorePct).toFixed(0)}%</strong>.
-                    Score ≥ 60% to unlock Self Study. New questions will be
-                    generated for the same chapters — your previous answers are
-                    shown for reference only.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                className="qr-retake-btn"
-                onClick={handleRetakeTest}
-                disabled={retaking}
-              >
-                {retaking ? (
-                  <>
-                    <span className="qr-retake-spinner" /> Generating questions…
-                  </>
-                ) : (
-                  <>
-                    🔁 Retake —{" "}
-                    {(state?.selectedChapters || []).join(", ") ||
-                      "Same Chapters"}
-                  </>
-                )}
-              </button>
-
-              {retakeError && (
-                <p className="qr-error-msg" style={{ marginTop: 8 }}>
-                  {retakeError}
-                </p>
-              )}
-            </motion.div> */}
-
             {/* Original action buttons unchanged */}
             <div className="qr-actions">
               <button
@@ -2426,15 +2598,17 @@ const QuizResult = () => {
         </AnimatePresence>,
         document.body,
       )}
-      <QuizResultChatPanel
-        evalData={evalData}
-        questions={questions}
-        answers={answers}
-        classNum={classNum}
-        subject={subject}
-        timeSpent={timeSpent}
-        onRetake={handleRetakeTest}
-      />{" "}
+      {!isJeeFoundation && (
+        <QuizResultChatPanel
+          evalData={evalData}
+          questions={questions}
+          answers={answers}
+          classNum={classNum}
+          subject={subject}
+          timeSpent={timeSpent}
+          onRetake={handleRetakeTest}
+        />
+      )}
     </div>
   );
 };

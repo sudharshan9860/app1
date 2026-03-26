@@ -18,6 +18,58 @@ const isJEEMainsAdv = (n = "") => {
 };
 const isScience = (n = "") => n.toLowerCase().includes("science");
 
+// Subjects that get the "Choose Path" (subtopics OR question-type) step
+// • Mathematics: classes 6–12 (non-JEE)
+// • Science: classes 6–10
+// • Physics / Chemistry: classes 11–12 (non-JEE)
+const isSubtopicPathSubject = (cls, sub) => {
+  if (!cls || !sub) return false;
+  const classNum = parseInt(
+    (cls.class_name || cls.class_code || "").toString().replace(/\D/g, ""),
+    10,
+  );
+  if (isNaN(classNum) || classNum < 6 || classNum > 12) return false;
+
+  const subName = (sub.subject_name || "").toLowerCase();
+  const isJEE =
+    subName.includes("jee") ||
+    subName.includes("mains") ||
+    subName.includes("advanced");
+  if (isJEE) return false;
+
+  const isMath =
+    (subName.includes("mathematics") || subName.includes("math")) &&
+    classNum >= 6 &&
+    classNum <= 12;
+  const isSci = subName.includes("science") && classNum >= 6 && classNum <= 10;
+  const isPhyChem =
+    (subName.includes("physics") || subName.includes("chemistry")) &&
+    classNum >= 11 &&
+    classNum <= 12;
+
+  return isMath || isSci || isPhyChem;
+};
+
+const isPhysics = (n = "") => {
+  const s = n.toLowerCase();
+  return (
+    s.includes("physics") &&
+    !s.includes("jee") &&
+    !s.includes("mains") &&
+    !s.includes("advanced")
+  );
+};
+
+const isChemistry = (n = "") => {
+  const s = n.toLowerCase();
+  return (
+    s.includes("chemistry") &&
+    !s.includes("jee") &&
+    !s.includes("mains") &&
+    !s.includes("advanced")
+  );
+};
+
 const SCIENCE_TYPES = [
   {
     id: "1",
@@ -430,28 +482,14 @@ export default function StudentWizard({
   const [loadCh, setLoadCh] = useState(false);
   const [loadQT, setLoadQT] = useState(false);
 
-  // ── New state for Class 9 Math subtopics ──
-  const [class9Subtopics, setClass9Subtopics] = useState([]); // fetched subtopic list
-  const [selClass9Subtopics, setSelClass9Subtopics] = useState([]); // selected codes (multi)
-  const [loadClass9Subs, setLoadClass9Subs] = useState(false); // loading flag
-  const [class9Path, setClass9Path] = useState(null); // "subtopics" | "questionType" | null
-
-  // Add alongside existing helpers (isJEEMainsAdv, isScience)
-  const isClass9Math = (cls, sub) => {
-    if (!cls || !sub) return false;
-    const className = (cls.class_name || cls.class_code || "").toString();
-    const subName = (sub.subject_name || "").toLowerCase();
-    return (
-      className.includes("9") &&
-      (subName.includes("mathematics") || subName.includes("math")) &&
-      !subName.includes("jee") &&
-      !subName.includes("mains") &&
-      !subName.includes("advanced")
-    );
-  };
+  // ── Subtopic-path state (Math 6-12, Science 6-10, Physics/Chemistry 11-12) ──
+  const [subtopicList, setSubtopicList] = useState([]); // fetched subtopic list
+  const [selSubtopics, setSelSubtopics] = useState([]); // selected codes (multi)
+  const [loadingSubtopicList, setLoadingSubtopicList] = useState(false); // loading flag
+  const [subtopicPath, setSubtopicPath] = useState(null); // "subtopics" | "questionType" | null
 
   // Inside StudentWizard function body, after state declarations:
-  const stepLabels = isClass9Math(selClass, selSub)
+  const stepLabels = isSubtopicPathSubject(selClass, selSub)
     ? ["Class", "Subject", "Chapter", "Choose Path"]
     : STEP_LABELS;
 
@@ -460,10 +498,9 @@ export default function StudentWizard({
     selClass && 0,
     selSub && 1,
     selChaps.length && 2,
-    // For Class 9 Math, step 3 is the path choice (complete when path is chosen + selection made)
-    isClass9Math(selClass, selSub)
-      ? (class9Path === "subtopics" && selClass9Subtopics.length > 0) ||
-        (class9Path === "questionType" && selQType)
+    isSubtopicPathSubject(selClass, selSub)
+      ? (subtopicPath === "subtopics" && selSubtopics.length > 0) ||
+        (subtopicPath === "questionType" && selQType)
         ? 3
         : null
       : selQType && 3,
@@ -484,7 +521,7 @@ export default function StudentWizard({
   const chapterRef = useRef(null);
   const qtypeRef = useRef(null);
   const beginRef = useRef(null);
-  const class9PathRef = useRef(null); // scroll target for the path-choice step
+  const subtopicPathRef = useRef(null); // scroll target for the path-choice step
 
   const scrollTo = (ref) => {
     setTimeout(
@@ -585,18 +622,17 @@ export default function StudentWizard({
     return () => clearTimeout(timer);
   }, [selChaps]); // eslint-disable-line
 
-  // Stage 4a: For Class 9 Math — auto-select subtopics path + subtopics
+  // Stage 4a: For subtopic-path subjects — auto-select subtopics path + subtopics
   useEffect(() => {
     if (prefillStageRef.current !== 4) return;
-    if (!isClass9Math(selClass, selSub)) return;
-    if (class9Subtopics.length === 0) return; // still loading
+    if (!isSubtopicPathSubject(selClass, selSub)) return;
+    if (subtopicList.length === 0) return; // still loading
 
     // Set path to subtopics
-    setClass9Path("subtopics");
+    setSubtopicPath("subtopics");
 
     if (prefill?.subtopics?.length > 0) {
-      // Match subtopics by name from the prefill data
-      const matchedCodes = class9Subtopics
+      const matchedCodes = subtopicList
         .filter((st) =>
           prefill.subtopics.some(
             (name) =>
@@ -607,23 +643,21 @@ export default function StudentWizard({
         .map((st) => st.updated_sub_topic_code);
 
       if (matchedCodes.length > 0) {
-        setSelClass9Subtopics(matchedCodes);
+        setSelSubtopics(matchedCodes);
       } else {
-        // No exact match — select the first subtopic so "Let's Begin" is enabled
-        setSelClass9Subtopics([class9Subtopics[0].updated_sub_topic_code]);
+        setSelSubtopics([subtopicList[0].updated_sub_topic_code]);
       }
     } else {
-      // No subtopics in prefill — select the first one
-      setSelClass9Subtopics([class9Subtopics[0].updated_sub_topic_code]);
+      setSelSubtopics([subtopicList[0].updated_sub_topic_code]);
     }
 
     prefillStageRef.current = 5; // done
-  }, [prefill, class9Subtopics, selClass, selSub]); // eslint-disable-line
+  }, [prefill, subtopicList, selClass, selSub]); // eslint-disable-line
 
-  // Stage 4b: For NON-Class-9-Math — auto-select first question type
+  // Stage 4b: For non-subtopic-path subjects — auto-select first question type
   useEffect(() => {
     if (prefillStageRef.current !== 4) return;
-    if (isClass9Math(selClass, selSub)) return; // handled above
+    if (isSubtopicPathSubject(selClass, selSub)) return; // handled above
     if (qtOpts.length === 0) return; // still loading
 
     // Auto-pick first question type to enable "Let's Begin"
@@ -653,10 +687,9 @@ export default function StudentWizard({
     setWorksheets([]);
 
     // Add to pickClass (after existing resets):
-    setClass9Path(null);
-    setClass9Subtopics([]);
-    setSelClass9Subtopics([]);
-
+    setSubtopicPath(null);
+    setSubtopicList([]);
+    setSelSubtopics([]);
     setLoadSub(true);
     scrollTo(subjectRef);
     try {
@@ -715,9 +748,9 @@ export default function StudentWizard({
     setSubTopics([]);
     setWorksheets([]);
 
-    setClass9Path(null);
-    setClass9Subtopics([]);
-    setSelClass9Subtopics([]);
+    setSubtopicPath(null);
+    setSubtopicList([]);
+    setSelSubtopics([]);
 
     setLoadCh(true);
     scrollTo(chapterRef);
@@ -736,13 +769,13 @@ export default function StudentWizard({
 
   // ── Toggle chapter (multi-select) ──────────────────────────────────────────
   const toggleChap = (ch) => {
-    if (isClass9Math(selClass, selSub)) {
-      // Single-select: clicking the same chip deselects, clicking another replaces
+    if (isSubtopicPathSubject(selClass, selSub)) {
+      // Single-select for all subtopic-path subjects
       setSelChaps((p) =>
         p.length === 1 && p[0].topic_code === ch.topic_code ? [] : [ch],
       );
     } else {
-      // Multi-select: existing behavior
+      // Multi-select for all other subjects
       setSelChaps((p) =>
         p.find((c) => c.topic_code === ch.topic_code)
           ? p.filter((c) => c.topic_code !== ch.topic_code)
@@ -753,10 +786,9 @@ export default function StudentWizard({
     setSelQType(null);
     setSelLevel(null);
     setSelWS(null);
-    // Reset Class 9 Math path state
-    setClass9Path(null);
-    setClass9Subtopics([]);
-    setSelClass9Subtopics([]);
+    setSubtopicPath(null);
+    setSubtopicList([]);
+    setSelSubtopics([]);
   };
 
   // ── Confirm chapters → load question types ─────────────────────────────────
@@ -764,10 +796,10 @@ export default function StudentWizard({
     if (!selChaps.length) return;
     const sn = selSub?.subject_name || "";
 
-    // ── NEW: Class 9 Math → fetch subtopics + show path choice ──
-    if (isClass9Math(selClass, selSub)) {
-      setLoadClass9Subs(true);
-      scrollTo(class9PathRef);
+    // ── Subtopic-path subjects → fetch subtopics + show path choice ──
+    if (isSubtopicPathSubject(selClass, selSub)) {
+      setLoadingSubtopicList(true);
+      scrollTo(subtopicPathRef);
       try {
         const res = await axiosInstance.post(
           "/backend/api/updated-subtopic-questions/",
@@ -778,16 +810,38 @@ export default function StudentWizard({
             sub_topic_names: true,
           },
         );
-        setClass9Subtopics(res.data.subtopics || []);
+        setSubtopicList(res.data.subtopics || []);
       } catch (e) {
-        console.error("Failed to fetch Class 9 subtopics:", e);
-        setClass9Subtopics([]);
+        console.error("Failed to fetch subtopics:", e);
+        setSubtopicList([]);
       } finally {
-        setLoadClass9Subs(false);
+        setLoadingSubtopicList(false);
       }
-      // Also load question types (BOARD_TYPES) so the user can choose that path
-      setQtOpts(BOARD_TYPES);
-      setClass9Path(null); // reset path choice
+      // Determine question-type options based on subject type
+      const sn = selSub?.subject_name || "";
+      if (isScience(sn)) {
+        // Science 6–10: fetch science question type availability
+        try {
+          const res2 = await axiosInstance.post("/question-images-paginator/", {
+            classid: selClass.class_code,
+            subjectid: selSub.subject_code,
+            topicid: selChaps.map((c) => c.topic_code),
+            external: true,
+          });
+          const subs = res2.data.subtopics || [];
+          setQtOpts(
+            subs.length
+              ? SCIENCE_TYPES.filter((t) => subs.includes(t.id))
+              : SCIENCE_TYPES,
+          );
+        } catch {
+          setQtOpts(SCIENCE_TYPES);
+        }
+      } else {
+        // Math 6–12 and Physics/Chemistry 11–12 use BOARD_TYPES
+        setQtOpts(BOARD_TYPES);
+      }
+      setSubtopicPath(null); // reset path choice
       return; // don't fall through to the normal flow
     }
     setLoadQT(true);
@@ -872,12 +926,12 @@ export default function StudentWizard({
   const isReady = () => {
     if (!selClass || !selSub || !selChaps.length) return false;
 
-    // Class 9 Math: either subtopics or question type path
-    if (isClass9Math(selClass, selSub)) {
-      if (class9Path === "subtopics") {
-        return selClass9Subtopics.length > 0;
+    // Subtopic-path subjects: either subtopics or question type path
+    if (isSubtopicPathSubject(selClass, selSub)) {
+      if (subtopicPath === "subtopics") {
+        return selSubtopics.length > 0;
       }
-      if (class9Path === "questionType") {
+      if (subtopicPath === "questionType") {
         if (!selQType) return false;
         if (selQType.value === "external" && subTopics.length > 0 && !selLevel)
           return false;
@@ -902,13 +956,16 @@ export default function StudentWizard({
     if (!isReady()) return;
     const sn = selSub?.subject_name || "";
 
-    // ── NEW: Class 9 Math subtopics path ──
-    if (isClass9Math(selClass, selSub) && class9Path === "subtopics") {
+    // ── Subtopic-path subjects — subtopics route ──
+    if (
+      isSubtopicPathSubject(selClass, selSub) &&
+      subtopicPath === "subtopics"
+    ) {
       const req = {
         classid: selClass.class_code,
         subjectid: selSub.subject_code,
         topicid: [selChaps[0].topic_code],
-        sub_topic_code: selClass9Subtopics, // array of updated_sub_topic_code values
+        sub_topic_code: selSubtopics, // array of updated_sub_topic_code values
         _useSubtopicApi: true, // flag for StudentDash to use the correct API
       };
       onReadyToSubmit?.(req, {
@@ -1135,7 +1192,7 @@ export default function StudentWizard({
                   marginTop: -12,
                 }}
               >
-                {isClass9Math(selClass, selSub)
+                {isSubtopicPathSubject(selClass, selSub)
                   ? "Select one chapter"
                   : "You can pick multiple chapters"}
               </p>
@@ -1175,8 +1232,8 @@ export default function StudentWizard({
 
                   <AnimatePresence>
                     {selChaps.length > 0 &&
-                      !class9Path &&
-                      class9Subtopics.length === 0 &&
+                      !subtopicPath &&
+                      subtopicList.length === 0 &&
                       qtOpts.length === 0 && (
                         <motion.div
                           initial={{ opacity: 0, y: 8 }}
@@ -1231,15 +1288,16 @@ export default function StudentWizard({
       </AnimatePresence>
 
       {/* ══════════════════════════════════════════════════════
-    STEP 3.5 — CLASS 9 MATH PATH CHOICE (subtopics vs question type)
+    STEP 3.5 — SUBTOPIC PATH CHOICE (subtopics vs question type)
+    Applies to: Math 6-12, Science 6-10, Physics/Chemistry 11-12
 ══════════════════════════════════════════════════════ */}
       <AnimatePresence>
-        {isClass9Math(selClass, selSub) &&
+        {isSubtopicPathSubject(selClass, selSub) &&
           selChaps.length === 1 &&
-          (class9Subtopics.length > 0 || qtOpts.length > 0) && (
+          (subtopicList.length > 0 || qtOpts.length > 0) && (
             <motion.div
-              ref={class9PathRef}
-              key="class9-path-section"
+              ref={subtopicPathRef}
+              key="subtopic-path-section"
               variants={sectionVariants}
               initial="hidden"
               animate="show"
@@ -1264,7 +1322,7 @@ export default function StudentWizard({
                       setSelSub(null);
                       setSelChaps([]);
                       setSelQType(null);
-                      setClass9Path(null);
+                      setSubtopicPath(null);
                     }}
                   />
                   <span
@@ -1282,7 +1340,7 @@ export default function StudentWizard({
                       setSelSub(null);
                       setSelChaps([]);
                       setSelQType(null);
-                      setClass9Path(null);
+                      setSubtopicPath(null);
                     }}
                   />
                   <span
@@ -1299,9 +1357,9 @@ export default function StudentWizard({
                     onClick={() => {
                       setSelChaps([]);
                       setSelQType(null);
-                      setClass9Path(null);
-                      setClass9Subtopics([]);
-                      setSelClass9Subtopics([]);
+                      setSubtopicPath(null);
+                      setSubtopicList([]);
+                      setSelSubtopics([]);
                     }}
                   />
                 </div>
@@ -1319,7 +1377,7 @@ export default function StudentWizard({
                   question type for the full chapter
                 </p>
 
-                {loadClass9Subs ? (
+                {loadingSubtopicList ? (
                   <StepSpinner label="Loading subtopics…" dark={dark} />
                 ) : (
                   <>
@@ -1329,7 +1387,7 @@ export default function StudentWizard({
                         whileHover={{ scale: 1.03 }}
                         whileTap={{ scale: 0.97 }}
                         onClick={() => {
-                          setClass9Path("subtopics");
+                          setSubtopicPath("subtopics");
                           setSelQType(null);
                           setSelLevel(null);
                           setSelWS(null);
@@ -1339,7 +1397,7 @@ export default function StudentWizard({
                           padding: "14px 18px",
                           borderRadius: 14,
                           border: `2px solid ${
-                            class9Path === "subtopics"
+                            subtopicPath === "subtopics"
                               ? dark
                                 ? "#a78bfa"
                                 : "#667eea"
@@ -1348,7 +1406,7 @@ export default function StudentWizard({
                                 : "rgba(0,0,0,0.08)"
                           }`,
                           background:
-                            class9Path === "subtopics"
+                            subtopicPath === "subtopics"
                               ? dark
                                 ? "rgba(167,139,250,0.15)"
                                 : "rgba(102,126,234,0.1)"
@@ -1357,7 +1415,7 @@ export default function StudentWizard({
                           cursor: "pointer",
                           fontWeight: 600,
                           fontSize: 14,
-                          opacity: class9Path === "questionType" ? 0.4 : 1,
+                          opacity: subtopicPath === "questionType" ? 0.4 : 1,
                           transition: "all 0.2s ease",
                         }}
                       >
@@ -1379,15 +1437,15 @@ export default function StudentWizard({
                         whileHover={{ scale: 1.03 }}
                         whileTap={{ scale: 0.97 }}
                         onClick={() => {
-                          setClass9Path("questionType");
-                          setSelClass9Subtopics([]);
+                          setSubtopicPath("questionType");
+                          setSelSubtopics([]);
                         }}
                         style={{
                           flex: 1,
                           padding: "14px 18px",
                           borderRadius: 14,
                           border: `2px solid ${
-                            class9Path === "questionType"
+                            subtopicPath === "questionType"
                               ? dark
                                 ? "#a78bfa"
                                 : "#667eea"
@@ -1396,7 +1454,7 @@ export default function StudentWizard({
                                 : "rgba(0,0,0,0.08)"
                           }`,
                           background:
-                            class9Path === "questionType"
+                            subtopicPath === "questionType"
                               ? dark
                                 ? "rgba(167,139,250,0.15)"
                                 : "rgba(102,126,234,0.1)"
@@ -1405,7 +1463,7 @@ export default function StudentWizard({
                           cursor: "pointer",
                           fontWeight: 600,
                           fontSize: 14,
-                          opacity: class9Path === "subtopics" ? 0.4 : 1,
+                          opacity: subtopicPath === "subtopics" ? 0.4 : 1,
                           transition: "all 0.2s ease",
                         }}
                       >
@@ -1426,8 +1484,8 @@ export default function StudentWizard({
 
                     {/* ── Subtopics multi-select (visible when path = "subtopics") ── */}
                     <AnimatePresence>
-                      {class9Path === "subtopics" &&
-                        class9Subtopics.length > 0 && (
+                      {subtopicPath === "subtopics" &&
+                        subtopicList.length > 0 && (
                           <motion.div
                             initial={{ opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: "auto" }}
@@ -1457,8 +1515,8 @@ export default function StudentWizard({
                                 paddingRight: 4,
                               }}
                             >
-                              {class9Subtopics.map((st) => {
-                                const sel = selClass9Subtopics.includes(
+                              {subtopicList.map((st) => {
+                                const sel = selSubtopics.includes(
                                   st.updated_sub_topic_code,
                                 );
                                 return (
@@ -1467,16 +1525,13 @@ export default function StudentWizard({
                                     label={st.updated_sub_topic_name}
                                     selected={sel}
                                     onClick={() => {
-                                      setSelClass9Subtopics((prev) =>
-                                        sel
-                                          ? prev.filter(
+                                      setSelSubtopics((p) =>
+                                        p.includes(st.updated_sub_topic_code)
+                                          ? p.filter(
                                               (c) =>
                                                 c !== st.updated_sub_topic_code,
                                             )
-                                          : [
-                                              ...prev,
-                                              st.updated_sub_topic_code,
-                                            ],
+                                          : [...p, st.updated_sub_topic_code],
                                       );
                                     }}
                                     dark={dark}
@@ -1490,7 +1545,7 @@ export default function StudentWizard({
 
                     {/* ── Question type cards (visible when path = "questionType") ── */}
                     <AnimatePresence>
-                      {class9Path === "questionType" && (
+                      {subtopicPath === "questionType" && (
                         <motion.div
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: "auto" }}
@@ -1632,7 +1687,7 @@ export default function StudentWizard({
           STEP 3 — QUESTION TYPE
       ══════════════════════════════════════════════════════ */}
       <AnimatePresence>
-        {qtOpts.length > 0 && !isClass9Math(selClass, selSub) && (
+        {qtOpts.length > 0 && !isSubtopicPathSubject(selClass, selSub) && (
           <motion.div
             ref={qtypeRef}
             key="qtype-section"

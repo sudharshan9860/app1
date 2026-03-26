@@ -51,6 +51,37 @@ const QuizMode = () => {
     }
   });
 
+  // ── JEE Foundation mode ──────────────────────────────────────────────
+  const [quizMode, setQuizMode] = useState("board"); // "board" | "jee_foundation"
+
+  // JEE Foundation — flat string arrays (chapters come as strings, not objects)
+  const [jeeClasses, setJeeClasses] = useState([]); // [6, 8, 9, 10]
+  const [jeeSelectedClass, setJeeSelectedClass] = useState(null); // number
+  const [jeeChapters, setJeeChapters] = useState([]); // string[]
+  const [jeeSelectedChapters, setJeeSelectedChapters] = useState([]); // string[]
+  const [jeeSubtopics, setJeeSubtopics] = useState([]); // string[]
+  const [jeeSelectedSubtopics, setJeeSelectedSubtopics] = useState([]); // string[]
+  const [jeeLoadingClasses, setJeeLoadingClasses] = useState(false);
+  const [jeeLoadingChapters, setJeeLoadingChapters] = useState(false);
+  const [jeeLoadingSubtopics, setJeeLoadingSubtopics] = useState(false);
+  const [jeeChapterFilter, setJeeChapterFilter] = useState("");
+
+  // Difficulty level — only for JEE Foundation
+  // null = mixed (no filter), "Easy" | "Medium" | "Hard"
+  const [jeeDifficulty, setJeeDifficulty] = useState(null);
+
+  const DIFFICULTY_LEVELS = [
+    { value: null, label: "Mixed (all levels)", badge: "—", color: "#64748b" },
+    { value: "Easy", label: "Level 1 — Easy", badge: "L1", color: "#16a34a" },
+    {
+      value: "Medium",
+      label: "Level 2 — Medium",
+      badge: "L2",
+      color: "#d97706",
+    },
+    { value: "Hard", label: "Level 3 — Hard", badge: "L3", color: "#dc2626" },
+  ];
+
   const ALLOWED_SUBJECTS = ["mathematics", "physics", "science"]; // lowercase for filtering
 
   const [subjects, setSubjects] = useState([]); // NEW: [{subject_code, subject_name}]
@@ -85,10 +116,11 @@ const QuizMode = () => {
   const [learningAnswers, setLearningAnswers] = useState({});
 
   /**
-   * FIX 2: isSubjectWithSubtopics — removed dead code after early return.
-   * Now correctly returns true for:
+   * isSubjectWithSubtopics — returns true for subjects that support subtopic filtering:
    *   - Mathematics (class 6–12, non-JEE)
    *   - Science (class 6–10)
+   *   - Physics (class 11–12, non-JEE)
+   *   - Chemistry (class 11–12, non-JEE)
    */
   const isSubjectWithSubtopics = (() => {
     if (!selectedClassObj || !selectedSubject || !selectedSubjectObj)
@@ -108,24 +140,83 @@ const QuizMode = () => {
     if (isNaN(classNum) || classNum < 6 || classNum > 12) return false;
 
     const subjectLower = selectedSubject.toLowerCase();
+    const isJEE =
+      subjectLower.includes("jee") ||
+      subjectLower.includes("mains") ||
+      subjectLower.includes("advanced");
+    if (isJEE) return false;
 
     const isMath =
       (subjectLower.includes("mathematics") ||
         subjectLower.includes("maths") ||
         subjectLower.includes("math")) &&
-      !subjectLower.includes("jee") &&
-      !subjectLower.includes("mains") &&
-      !subjectLower.includes("advanced");
+      classNum >= 6 &&
+      classNum <= 12;
 
-    const isScience =
+    const isScienceMid =
       subjectLower.includes("science") && classNum >= 6 && classNum <= 10;
 
-    return isMath || isScience;
+    const isPhyChem11_12 =
+      (subjectLower.includes("physics") ||
+        subjectLower.includes("chemistry")) &&
+      classNum >= 11 &&
+      classNum <= 12;
+
+    return isMath || isScienceMid || isPhyChem11_12;
   })();
 
   const [subtopics, setSubtopics] = useState([]); // NOW: [{updated_sub_topic_code, updated_sub_topic_name}]
   const [selectedSubtopics, setSelectedSubtopics] = useState([]); // NOW: string[] of subtopic NAMES (for generate payload)
   const [loadingSubtopics, setLoadingSubtopics] = useState(false);
+
+  // ── JEE Foundation: fetch classes on mode switch ──
+  useEffect(() => {
+    if (quizMode !== "jee_foundation") return;
+    setJeeLoadingClasses(true);
+    fetch(
+      `https://quizmode.smartlearners.ai/api/v1/classes?subject=JEE_FOUNDATION_MATH`,
+    )
+      .then((r) => r.json())
+      .then((data) => setJeeClasses(data.classes || []))
+      .catch(() => setJeeClasses([]))
+      .finally(() => setJeeLoadingClasses(false));
+  }, [quizMode]);
+
+  // ── JEE Foundation: fetch chapters when class selected ──
+  useEffect(() => {
+    if (quizMode !== "jee_foundation" || !jeeSelectedClass) return;
+    setJeeChapters([]);
+    setJeeSelectedChapters([]);
+    setJeeSubtopics([]);
+    setJeeSelectedSubtopics([]);
+    setJeeLoadingChapters(true);
+    fetch(
+      `https://quizmode.smartlearners.ai/api/v1/classes/${jeeSelectedClass}/chapters?subject=JEE_FOUNDATION_MATH`,
+    )
+      .then((r) => r.json())
+      .then((data) => setJeeChapters(data.chapters || []))
+      .catch(() => setJeeChapters([]))
+      .finally(() => setJeeLoadingChapters(false));
+  }, [quizMode, jeeSelectedClass]);
+
+  // ── JEE Foundation: fetch subtopics when exactly 1 chapter selected ──
+  useEffect(() => {
+    if (quizMode !== "jee_foundation") return;
+    if (jeeSelectedChapters.length !== 1) {
+      setJeeSubtopics([]);
+      setJeeSelectedSubtopics([]);
+      return;
+    }
+    const chapter = encodeURIComponent(jeeSelectedChapters[0]);
+    setJeeLoadingSubtopics(true);
+    fetch(
+      `https://quizmode.smartlearners.ai/api/v1/classes/${jeeSelectedClass}/chapters/${chapter}/subtopics?subject=JEE_FOUNDATION_MATH`,
+    )
+      .then((r) => r.json())
+      .then((data) => setJeeSubtopics(data.sub_topics || []))
+      .catch(() => setJeeSubtopics([]))
+      .finally(() => setJeeLoadingSubtopics(false));
+  }, [quizMode, jeeSelectedClass, jeeSelectedChapters]);
 
   useEffect(() => {
     const loadClasses = async () => {
@@ -302,6 +393,7 @@ const QuizMode = () => {
     };
     loadSubtopics();
   }, [selectedChapters, selectedClassObj, selectedSubjectObj, selectedSubject]);
+
   const toggleChapter = useCallback((ch) => {
     setSelectedChapters(
       (prev) =>
@@ -332,6 +424,12 @@ const QuizMode = () => {
         : isSubjectWithSubtopics
           ? 4 // ← always 4 once chapter chosen (subtopic optional)
           : 4; // non-Math also 4
+
+  const jeeCurrentStep = !jeeSelectedClass
+    ? 1
+    : jeeSelectedChapters.length === 0
+      ? 2
+      : 3;
 
   const totalQuestions = selectedChapters.length * questionsPerChapter;
   const estimatedTime = totalQuestions * 2; // 2 min per question
@@ -548,6 +646,48 @@ const QuizMode = () => {
     }
   };
 
+  // ── JEE Foundation generate handler ──
+  const handleJeeGenerate = async () => {
+    if (!jeeSelectedClass || jeeSelectedChapters.length === 0) return;
+    setGenerating(true);
+    setError("");
+    try {
+      const payload = {
+        class_num: jeeSelectedClass,
+        chapters: jeeSelectedChapters,
+        questions_per_chapter: questionsPerChapter,
+        subject: "JEE_FOUNDATION_MATH",
+        ...(jeeDifficulty && { difficulty_level: jeeDifficulty }),
+        ...(jeeSelectedSubtopics.length > 0 && {
+          sub_topics: jeeSelectedSubtopics,
+        }),
+      };
+
+      const res = await generateQuestions(payload);
+      navigate("/quiz-question", {
+        state: {
+          quizData: res.data,
+          classNum: jeeSelectedClass,
+          selectedChapters: jeeSelectedChapters,
+          questionsPerChapter,
+          subject: "JEE_FOUNDATION_MATH",
+          selectedSubtopics: jeeSelectedSubtopics,
+          // JEE Foundation context for result screen
+          isJeeFoundation: true,
+          jeeDifficulty: jeeDifficulty, // current level played
+          // no boardSelection — no self study prefill for JEE Foundation
+        },
+      });
+    } catch (err) {
+      setError(
+        err.response?.data?.detail ||
+          "Failed to generate questions. Please try again.",
+      );
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   // True when the selected chapter(s) appear in any previously saved quiz
   const hasHistory = useMemo(() => {
     if (selectedChapters.length === 0 || prevQuizzes.length === 0) return false;
@@ -566,6 +706,13 @@ const QuizMode = () => {
       attemptedChapterNames.has(formatChapterName(ch.name).toLowerCase()),
     );
   }, [selectedChapters, prevQuizzes]);
+
+  // ── JEE filtered chapters for search ──
+  const jeeFilteredChapters = useMemo(() => {
+    if (!jeeChapterFilter.trim()) return jeeChapters;
+    const q = jeeChapterFilter.toLowerCase();
+    return jeeChapters.filter((ch) => ch.toLowerCase().includes(q));
+  }, [jeeChapters, jeeChapterFilter]);
 
   return (
     <div className={`quiz-mode-wrapper${isDark ? " dark-mode" : ""}`}>
@@ -589,7 +736,21 @@ const QuizMode = () => {
 
         {/* Header */}
         <div className="quiz-mode-header">
-          <h1>Test Prep</h1>
+          {/* ── Board / JEE Foundation Toggle ── */}
+          <div className="quiz-mode-toggle-row">
+            <button
+              className={`quiz-mode-toggle-btn ${quizMode === "board" ? "active" : ""}`}
+              onClick={() => setQuizMode("board")}
+            >
+              📚 Board
+            </button>
+            <button
+              className={`quiz-mode-toggle-btn ${quizMode === "jee_foundation" ? "active" : ""}`}
+              onClick={() => setQuizMode("jee_foundation")}
+            >
+              🏆 JEE Foundation
+            </button>
+          </div>
           <p>
             Select your class and chapters, then challenge yourself with
             AI-generated MCQ questions
@@ -604,46 +765,7 @@ const QuizMode = () => {
 
         {/* Score Breakdown Graph */}
         <div style={{ marginBottom: 24 }}>
-          <QuizScoreGraph />
-        </div>
-
-        {/* Steps indicator */}
-        <div className="quiz-steps-wrapper">
-          <div className="quiz-steps">
-            {[
-              { num: 1, label: "Class", desc: "Select class" },
-              { num: 2, label: "Subject", desc: "Pick subject" },
-              { num: 3, label: "Chapter", desc: "Pick a topic" },
-              ...(isSubjectWithSubtopics
-                ? [{ num: 4, label: "Subtopics", desc: "Filter subtopics" }]
-                : []),
-            ].map((step, i) => (
-              <React.Fragment key={step.num}>
-                {i > 0 && (
-                  <div
-                    className={`quiz-step-line ${currentStep > step.num - 1 ? "completed" : ""}`}
-                  />
-                )}
-                <div
-                  className={`quiz-step ${
-                    currentStep === step.num
-                      ? "active"
-                      : currentStep > step.num
-                        ? "completed"
-                        : ""
-                  }`}
-                >
-                  <div className="quiz-step-num">
-                    {currentStep > step.num ? "✓" : step.num}
-                  </div>
-                  <div className="quiz-step-text">
-                    <span className="quiz-step-label">{step.label}</span>
-                    <span className="quiz-step-desc">{step.desc}</span>
-                  </div>
-                </div>
-              </React.Fragment>
-            ))}
-          </div>
+          <QuizScoreGraph quizMode={quizMode} />
         </div>
 
         {/* Error */}
@@ -661,317 +783,669 @@ const QuizMode = () => {
           )}
         </AnimatePresence>
 
-        {generating ? (
-          <div className="quiz-glass-card">
-            <div className="quiz-loading-overlay">
-              <div className="quiz-spinner" />
-              <span className="quiz-loading-text">
-                Generating {totalQuestions} questions...
-              </span>
-              <span className="quiz-loading-subtext">
-                AI is crafting bridge-diagnostic questions for{" "}
-                {selectedChapters.length} chapter
-                {selectedChapters.length > 1 ? "s" : ""}
-              </span>
-            </div>
-          </div>
-        ) : (
+        {/* ══════════════════════════════════════════════
+            BOARD MODE WIZARD
+        ══════════════════════════════════════════════ */}
+        {quizMode === "board" && (
           <>
-            {/* ── Section 1: Class Selection ── */}
-            <div className="quiz-glass-card">
-              <div className="quiz-section-label">
-                <span className="quiz-section-num">1</span>
-                <span>Select Class</span>
+            {/* Steps indicator */}
+            <div className="quiz-steps-wrapper">
+              <div className="quiz-steps">
+                {[
+                  { num: 1, label: "Class", desc: "Select class" },
+                  { num: 2, label: "Subject", desc: "Pick subject" },
+                  { num: 3, label: "Chapter", desc: "Pick a topic" },
+                  ...(isSubjectWithSubtopics
+                    ? [{ num: 4, label: "Subtopics", desc: "Filter subtopics" }]
+                    : []),
+                ].map((step, i) => (
+                  <React.Fragment key={step.num}>
+                    {i > 0 && (
+                      <div
+                        className={`quiz-step-line ${currentStep > step.num - 1 ? "completed" : ""}`}
+                      />
+                    )}
+                    <div
+                      className={`quiz-step ${
+                        currentStep === step.num
+                          ? "active"
+                          : currentStep > step.num
+                            ? "completed"
+                            : ""
+                      }`}
+                    >
+                      <div className="quiz-step-num">
+                        {currentStep > step.num ? "✓" : step.num}
+                      </div>
+                      <div className="quiz-step-text">
+                        <span className="quiz-step-label">{step.label}</span>
+                        <span className="quiz-step-desc">{step.desc}</span>
+                      </div>
+                    </div>
+                  </React.Fragment>
+                ))}
               </div>
-              {loadingClasses ? (
-                <div className="quiz-empty-state">
-                  <div
-                    className="quiz-spinner"
-                    style={{ margin: "0 auto", width: 32, height: 32 }}
-                  />
-                </div>
-              ) : (
-                <select
-                  className="quiz-glass-select"
-                  value={selectedClassObj?.class_code || ""}
-                  onChange={(e) => {
-                    const cls = classes.find(
-                      (c) => c.class_code === e.target.value,
-                    );
-                    setSelectedClassObj(cls || null);
-                    setSelectedClass(cls?.class_code || "");
-                  }}
-                >
-                  <option value="">Choose your class...</option>
-                  {classes.map((c) => (
-                    <option key={c.class_code} value={c.class_code}>
-                      {c.class_name}
-                    </option>
-                  ))}
-                </select>
-              )}
             </div>
 
-            {/* ── Section 2: Subject Selection (after class is selected) ── */}
-            {selectedClassObj && (
+            {generating ? (
               <div className="quiz-glass-card">
-                <div className="quiz-section-label">
-                  <span className="quiz-section-num">2</span>
-                  <span>Select Subject</span>
+                <div className="quiz-loading-overlay">
+                  <div className="quiz-spinner" />
+                  <span className="quiz-loading-text">
+                    Generating {totalQuestions} questions...
+                  </span>
+                  <span className="quiz-loading-subtext">
+                    AI is crafting bridge-diagnostic questions for{" "}
+                    {selectedChapters.length} chapter
+                    {selectedChapters.length > 1 ? "s" : ""}
+                  </span>
                 </div>
-                {loadingSubjects ? (
-                  <div className="quiz-empty-state">
-                    <div
-                      className="quiz-spinner"
-                      style={{ margin: "0 auto", width: 32, height: 32 }}
-                    />
-                  </div>
-                ) : (
-                  <div className="quiz-subject-grid">
-                    {subjects.map((sub) => {
-                      const name = sub.subject_name.toUpperCase();
-                      const icon = name.includes("PHYSICS")
-                        ? "⚛️"
-                        : name.includes("SCIENCE")
-                          ? "🔬"
-                          : "📐";
-                      return (
-                        <motion.button
-                          key={sub.subject_code}
-                          className={`quiz-subject-chip ${selectedSubjectObj?.subject_code === sub.subject_code ? "selected" : ""}`}
-                          onClick={() => {
-                            setSelectedSubjectObj(sub);
-                            // FIX 1: Single-argument setSelectedSubject with correct Science detection
-                            setSelectedSubject(
-                              name.includes("PHYSICS")
-                                ? "PHYSICS"
-                                : name.includes("SCIENCE")
-                                  ? "SCIENCE"
-                                  : "MATHEMATICS",
-                            );
-                          }}
-                          whileTap={{ scale: 0.96 }}
-                        >
-                          <span className="quiz-subject-icon">{icon}</span>
-                          <span>{sub.subject_name}</span>
-                        </motion.button>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
-            )}
-
-            {/* ── Section 3: Chapter Selection ── */}
-            <AnimatePresence>
-              {selectedClassObj && selectedSubjectObj && (
-                <motion.div className="quiz-glass-card">
+            ) : (
+              <>
+                {/* ── Section 1: Class Selection ── */}
+                <div className="quiz-glass-card">
                   <div className="quiz-section-label">
-                    <span className="quiz-section-num">3</span>
-                    <span>Select Chapter</span>
-                    {selectedChapters.length === 1 && (
-                      <span className="quiz-section-count">1 selected</span>
+                    <span className="quiz-section-num">1</span>
+                    <span>Select Class</span>
+                  </div>
+                  {loadingClasses ? (
+                    <div className="quiz-empty-state">
+                      <div
+                        className="quiz-spinner"
+                        style={{ margin: "0 auto", width: 32, height: 32 }}
+                      />
+                    </div>
+                  ) : (
+                    <select
+                      className="quiz-glass-select"
+                      value={selectedClassObj?.class_code || ""}
+                      onChange={(e) => {
+                        const cls = classes.find(
+                          (c) => c.class_code === e.target.value,
+                        );
+                        setSelectedClassObj(cls || null);
+                        setSelectedClass(cls?.class_code || "");
+                      }}
+                    >
+                      <option value="">Choose your class...</option>
+                      {classes.map((c) => (
+                        <option key={c.class_code} value={c.class_code}>
+                          {c.class_name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {/* ── Section 2: Subject Selection (after class is selected) ── */}
+                {selectedClassObj && (
+                  <div className="quiz-glass-card">
+                    <div className="quiz-section-label">
+                      <span className="quiz-section-num">2</span>
+                      <span>Select Subject</span>
+                    </div>
+                    {loadingSubjects ? (
+                      <div className="quiz-empty-state">
+                        <div
+                          className="quiz-spinner"
+                          style={{ margin: "0 auto", width: 32, height: 32 }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="quiz-subject-grid">
+                        {subjects.map((sub) => {
+                          const name = sub.subject_name.toUpperCase();
+                          const icon = name.includes("PHYSICS")
+                            ? "⚛️"
+                            : name.includes("SCIENCE")
+                              ? "🔬"
+                              : "📐";
+                          return (
+                            <motion.button
+                              key={sub.subject_code}
+                              className={`quiz-subject-chip ${selectedSubjectObj?.subject_code === sub.subject_code ? "selected" : ""}`}
+                              onClick={() => {
+                                setSelectedSubjectObj(sub);
+                                setSelectedSubject(
+                                  name.includes("PHYSICS")
+                                    ? "PHYSICS"
+                                    : name.includes("SCIENCE")
+                                      ? "SCIENCE"
+                                      : "MATHEMATICS",
+                                );
+                              }}
+                              whileTap={{ scale: 0.96 }}
+                            >
+                              <span className="quiz-subject-icon">{icon}</span>
+                              <span>{sub.subject_name}</span>
+                            </motion.button>
+                          );
+                        })}
+                      </div>
                     )}
                   </div>
+                )}
 
-                  {/* Search */}
-                  <div className="quiz-chapter-search">
-                    <input
-                      className="quiz-glass-input"
-                      placeholder="Search chapters..."
-                      value={chapterFilter}
-                      onChange={(e) => setChapterFilter(e.target.value)}
-                    />
-                  </div>
+                {/* ── Section 3: Chapter Selection ── */}
+                <AnimatePresence>
+                  {selectedClassObj && selectedSubjectObj && (
+                    <motion.div className="quiz-glass-card">
+                      <div className="quiz-section-label">
+                        <span className="quiz-section-num">3</span>
+                        <span>Select Chapter</span>
+                        {selectedChapters.length === 1 && (
+                          <span className="quiz-section-count">1 selected</span>
+                        )}
+                      </div>
 
-                  {/* Radio-style chip grid */}
-                  {loadingChapters ? (
-                    <div className="quiz-empty-state">...</div>
-                  ) : (
-                    <div className="quiz-chapter-grid">
-                      {filteredChapters.map((ch) => {
-                        const isSelected =
-                          selectedChapters.length === 1 &&
-                          selectedChapters[0].topic_code === ch.topic_code;
-                        return (
-                          <motion.button
-                            key={ch.topic_code}
-                            className={`quiz-chapter-chip ${isSelected ? "selected" : ""}`}
-                            onClick={() => toggleChapter(ch)}
-                            whileTap={{ scale: 0.96 }}
-                          >
-                            <span
-                              className={`quiz-chip-radio ${isSelected ? "visible" : ""}`}
-                            />
-                            <span className="quiz-chip-text">
-                              {formatChapterName(ch.name)}
-                            </span>
-                          </motion.button>
-                        );
-                      })}
+                      {/* Search */}
+                      <div className="quiz-chapter-search">
+                        <input
+                          className="quiz-glass-input"
+                          placeholder="Search chapters..."
+                          value={chapterFilter}
+                          onChange={(e) => setChapterFilter(e.target.value)}
+                        />
+                      </div>
+
+                      {/* Radio-style chip grid */}
+                      {loadingChapters ? (
+                        <div className="quiz-empty-state">...</div>
+                      ) : (
+                        <div className="quiz-chapter-grid">
+                          {filteredChapters.map((ch) => {
+                            const isSelected =
+                              selectedChapters.length === 1 &&
+                              selectedChapters[0].topic_code === ch.topic_code;
+                            return (
+                              <motion.button
+                                key={ch.topic_code}
+                                className={`quiz-chapter-chip ${isSelected ? "selected" : ""}`}
+                                onClick={() => toggleChapter(ch)}
+                                whileTap={{ scale: 0.96 }}
+                              >
+                                <span
+                                  className={`quiz-chip-radio ${isSelected ? "visible" : ""}`}
+                                />
+                                <span className="quiz-chip-text">
+                                  {formatChapterName(ch.name)}
+                                </span>
+                              </motion.button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {isSubjectWithSubtopics && selectedChapters.length > 0 && (
+                  <motion.div
+                    className="quiz-glass-card"
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -16 }}
+                    transition={{ duration: 0.35 }}
+                  >
+                    <div className="quiz-section-label">
+                      <span className="quiz-section-num">4</span>
+                      <span>Select Subtopics</span>
+                      {selectedSubtopics.length > 0 && (
+                        <span className="quiz-section-count">
+                          {selectedSubtopics.length} selected
+                        </span>
+                      )}
                     </div>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
 
-            {isSubjectWithSubtopics && selectedChapters.length > 0 && (
-              <motion.div
-                className="quiz-glass-card"
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -16 }}
-                transition={{ duration: 0.35 }}
-              >
-                <div className="quiz-section-label">
-                  <span className="quiz-section-num">4</span>
-                  <span>Select Subtopics</span>
-                  {selectedSubtopics.length > 0 && (
-                    <span className="quiz-section-count">
-                      {selectedSubtopics.length} selected
-                    </span>
-                  )}
-                </div>
+                    {loadingSubtopics ? (
+                      <div className="quiz-empty-state">
+                        <div
+                          className="quiz-spinner"
+                          style={{ margin: "0 auto", width: 32, height: 32 }}
+                        />
+                      </div>
+                    ) : subtopics.length === 0 ? (
+                      <div className="quiz-empty-state">
+                        <div className="empty-icon">📭</div>
+                        <p>No subtopics available for selected chapters.</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="quiz-chapter-grid">
+                          {subtopics.map((st) => (
+                            <motion.button
+                              key={st.updated_sub_topic_code}
+                              className={`quiz-chapter-chip ${selectedSubtopics.includes(st.updated_sub_topic_name) ? "selected" : ""}`}
+                              onClick={() =>
+                                setSelectedSubtopics((prev) =>
+                                  prev.includes(st.updated_sub_topic_name)
+                                    ? prev.filter(
+                                        (n) => n !== st.updated_sub_topic_name,
+                                      )
+                                    : [...prev, st.updated_sub_topic_name],
+                                )
+                              }
+                              whileTap={{ scale: 0.96 }}
+                            >
+                              <span
+                                className={`quiz-chip-check ${selectedSubtopics.includes(st.updated_sub_topic_name) ? "visible" : ""}`}
+                              >
+                                ✓
+                              </span>
+                              <span className="quiz-chip-text">
+                                {st.updated_sub_topic_name}
+                              </span>
+                            </motion.button>
+                          ))}
+                        </div>
+                        <p
+                          style={{
+                            marginTop: 8,
+                            fontSize: "0.85rem",
+                            opacity: 0.7,
+                          }}
+                        >
+                          "leave blank to cover all" ✅
+                        </p>
+                      </>
+                    )}
+                  </motion.div>
+                )}
 
-                {loadingSubtopics ? (
-                  <div className="quiz-empty-state">
+                {/* ── Section 4: Action Button ── */}
+                <AnimatePresence>
+                  {selectedChapters.length > 0 && (
+                    <motion.div
+                      className="quiz-glass-card"
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -16 }}
+                      transition={{ duration: 0.35, delay: 0.1 }}
+                    >
+                      <div className="quiz-action-buttons">
+                        {isRetakeFlow ? (
+                          <button
+                            className="quiz-start-btn"
+                            onClick={handleRevise}
+                            disabled={loadingCheatsheet || generating}
+                            style={{ flex: 1 }}
+                          >
+                            {loadingCheatsheet ? (
+                              <>
+                                <div
+                                  className="quiz-spinner"
+                                  style={{
+                                    width: 18,
+                                    height: 18,
+                                    borderWidth: 2,
+                                  }}
+                                />
+                                Loading Cheatsheet...
+                              </>
+                            ) : (
+                              <>
+                                <span className="btn-shimmer" />
+                                📋 Revise & Start Test
+                              </>
+                            )}
+                          </button>
+                        ) : hasHistory ? (
+                          <button
+                            className="quiz-start-btn"
+                            onClick={handleRevise}
+                            disabled={loadingCheatsheet || generating}
+                            style={{ flex: 1 }}
+                          >
+                            {loadingCheatsheet ? (
+                              <>
+                                <div
+                                  className="quiz-spinner"
+                                  style={{
+                                    width: 18,
+                                    height: 18,
+                                    borderWidth: 2,
+                                  }}
+                                />
+                                Loading Cheatsheet...
+                              </>
+                            ) : (
+                              <>
+                                <span className="btn-shimmer" />
+                                📋 Revise & Start Test
+                              </>
+                            )}
+                          </button>
+                        ) : (
+                          // Fresh chapter → go directly
+                          <button
+                            className="quiz-start-btn"
+                            onClick={handleGenerate}
+                            disabled={generating}
+                            style={{ flex: 1 }}
+                          >
+                            {generating ? (
+                              <>
+                                <div
+                                  className="quiz-spinner"
+                                  style={{
+                                    width: 18,
+                                    height: 18,
+                                    borderWidth: 2,
+                                  }}
+                                />
+                                Generating...
+                              </>
+                            ) : (
+                              <>
+                                <span className="btn-shimmer" />
+                                Start Test
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </>
+            )}
+          </>
+        )}
+
+        {/* ══════════════════════════════════════════════
+            JEE FOUNDATION MODE WIZARD
+        ══════════════════════════════════════════════ */}
+        {quizMode === "jee_foundation" && (
+          <>
+            {/* Steps indicator */}
+            <div className="quiz-steps-wrapper">
+              <div className="quiz-steps">
+                {[
+                  { num: 1, label: "Class", desc: "Select class" },
+                  { num: 2, label: "Chapter", desc: "Pick a topic" },
+                  { num: 3, label: "Difficulty", desc: "Choose level" },
+                ].map((step, i) => (
+                  <React.Fragment key={step.num}>
+                    {i > 0 && (
+                      <div
+                        className={`quiz-step-line ${jeeCurrentStep > step.num - 1 ? "completed" : ""}`}
+                      />
+                    )}
                     <div
-                      className="quiz-spinner"
-                      style={{ margin: "0 auto", width: 32, height: 32 }}
-                    />
+                      className={`quiz-step ${
+                        jeeCurrentStep === step.num
+                          ? "active"
+                          : jeeCurrentStep > step.num
+                            ? "completed"
+                            : ""
+                      }`}
+                    >
+                      <div className="quiz-step-num">
+                        {jeeCurrentStep > step.num ? "✓" : step.num}
+                      </div>
+                      <div className="quiz-step-text">
+                        <span className="quiz-step-label">{step.label}</span>
+                        <span className="quiz-step-desc">{step.desc}</span>
+                      </div>
+                    </div>
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+
+            {generating ? (
+              <div className="quiz-glass-card">
+                <div className="quiz-loading-overlay">
+                  <div className="quiz-spinner" />
+                  <span className="quiz-loading-text">
+                    Generating questions...
+                  </span>
+                  <span className="quiz-loading-subtext">
+                    Fetching{" "}
+                    {jeeDifficulty
+                      ? `Level ${jeeDifficulty}`
+                      : "mixed difficulty"}{" "}
+                    questions for {jeeSelectedChapters.length} chapter
+                    {jeeSelectedChapters.length > 1 ? "s" : ""}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* ── Step 1: Class ── */}
+                <div className="quiz-glass-card">
+                  <div className="quiz-section-label">
+                    <span className="quiz-section-num">1</span>
+                    <span>Select Class</span>
                   </div>
-                ) : subtopics.length === 0 ? (
-                  <div className="quiz-empty-state">
-                    <div className="empty-icon">📭</div>
-                    <p>No subtopics available for selected chapters.</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="quiz-chapter-grid">
-                      {subtopics.map((st) => (
+                  {jeeLoadingClasses ? (
+                    <div className="quiz-empty-state">
+                      <div
+                        className="quiz-spinner"
+                        style={{ margin: "0 auto", width: 32, height: 32 }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="jee-class-grid">
+                      {jeeClasses.map((cls) => (
                         <motion.button
-                          key={st.updated_sub_topic_code}
-                          className={`quiz-chapter-chip ${selectedSubtopics.includes(st.updated_sub_topic_name) ? "selected" : ""}`}
-                          onClick={() =>
-                            setSelectedSubtopics((prev) =>
-                              prev.includes(st.updated_sub_topic_name)
-                                ? prev.filter(
-                                    (n) => n !== st.updated_sub_topic_name,
-                                  )
-                                : [...prev, st.updated_sub_topic_name],
-                            )
-                          }
+                          key={cls}
+                          className={`jee-class-chip ${jeeSelectedClass === cls ? "selected" : ""}`}
+                          onClick={() => setJeeSelectedClass(cls)}
                           whileTap={{ scale: 0.96 }}
                         >
-                          <span
-                            className={`quiz-chip-check ${selectedSubtopics.includes(st.updated_sub_topic_name) ? "visible" : ""}`}
-                          >
-                            ✓
-                          </span>
-                          <span className="quiz-chip-text">
-                            {st.updated_sub_topic_name}
-                          </span>
+                          Class {cls}
                         </motion.button>
                       ))}
                     </div>
-                    <p
-                      style={{
-                        marginTop: 8,
-                        fontSize: "0.85rem",
-                        opacity: 0.7,
-                      }}
-                    >
-                      "leave blank to cover all" ✅
-                    </p>
-                  </>
-                )}
-              </motion.div>
-            )}
+                  )}
+                </div>
 
-            {/* ── Section 4: Action Button ── */}
-            <AnimatePresence>
-              {selectedChapters.length > 0 && (
-                <motion.div
-                  className="quiz-glass-card"
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -16 }}
-                  transition={{ duration: 0.35, delay: 0.1 }}
-                >
-                  <div className="quiz-action-buttons">
-                    {isRetakeFlow ? (
-                      <button
-                        className="quiz-start-btn"
-                        onClick={handleRevise}
-                        disabled={loadingCheatsheet || generating}
-                        style={{ flex: 1 }}
-                      >
-                        {loadingCheatsheet ? (
-                          <>
-                            <div
-                              className="quiz-spinner"
-                              style={{ width: 18, height: 18, borderWidth: 2 }}
-                            />
-                            Loading Cheatsheet...
-                          </>
-                        ) : (
-                          <>
-                            <span className="btn-shimmer" />
-                            📋 Revise & Start Test
-                          </>
+                {/* ── Step 2: Chapter ── */}
+                <AnimatePresence>
+                  {jeeSelectedClass && (
+                    <motion.div
+                      className="quiz-glass-card"
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -12 }}
+                    >
+                      <div className="quiz-section-label">
+                        <span className="quiz-section-num">2</span>
+                        <span>Select Chapter</span>
+                        {jeeSelectedChapters.length > 0 && (
+                          <span className="quiz-section-count">
+                            {jeeSelectedChapters.length} selected
+                          </span>
                         )}
-                      </button>
-                    ) : hasHistory ? (
-                      // ← NEW: user has attempted this chapter before → show cheatsheet first
-                      <button
-                        className="quiz-start-btn"
-                        onClick={handleRevise}
-                        disabled={loadingCheatsheet || generating}
-                        style={{ flex: 1 }}
-                      >
-                        {loadingCheatsheet ? (
-                          <>
+                      </div>
+                      <div className="quiz-chapter-search">
+                        <input
+                          className="quiz-glass-input"
+                          placeholder="Search chapters..."
+                          value={jeeChapterFilter}
+                          onChange={(e) => setJeeChapterFilter(e.target.value)}
+                        />
+                      </div>
+                      {jeeLoadingChapters ? (
+                        <div className="quiz-empty-state">
+                          <div
+                            className="quiz-spinner"
+                            style={{ margin: "0 auto", width: 32, height: 32 }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="quiz-chapter-grid">
+                          {jeeFilteredChapters.map((ch) => {
+                            const isSelected = jeeSelectedChapters.includes(ch);
+                            return (
+                              <motion.button
+                                key={ch}
+                                className={`quiz-chapter-chip ${isSelected ? "selected" : ""}`}
+                                onClick={() =>
+                                  setJeeSelectedChapters(
+                                    isSelected
+                                      ? jeeSelectedChapters.filter(
+                                          (c) => c !== ch,
+                                        )
+                                      : [...jeeSelectedChapters, ch],
+                                  )
+                                }
+                                whileTap={{ scale: 0.97 }}
+                              >
+                                <span
+                                  className={`quiz-chip-check ${isSelected ? "visible" : ""}`}
+                                >
+                                  ✓
+                                </span>
+                                <span className="quiz-chip-text">{ch}</span>
+                              </motion.button>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Optional subtopics — shown only when exactly 1 chapter selected and subtopics exist */}
+                      {jeeSelectedChapters.length === 1 &&
+                        jeeSubtopics.length > 0 && (
+                          <div style={{ marginTop: 16 }}>
                             <div
-                              className="quiz-spinner"
-                              style={{ width: 18, height: 18, borderWidth: 2 }}
-                            />
-                            Loading Cheatsheet...
-                          </>
-                        ) : (
-                          <>
-                            <span className="btn-shimmer" />
-                            📋 Revise & Start Test
-                          </>
+                              className="quiz-section-label"
+                              style={{
+                                marginBottom: 8,
+                                fontSize: "0.82rem",
+                                opacity: 0.7,
+                              }}
+                            >
+                              Optional: filter by subtopic
+                            </div>
+                            {jeeLoadingSubtopics ? (
+                              <div className="quiz-empty-state">
+                                <div
+                                  className="quiz-spinner"
+                                  style={{
+                                    margin: "0 auto",
+                                    width: 24,
+                                    height: 24,
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <div className="quiz-chapter-grid">
+                                {jeeSubtopics.map((st) => {
+                                  const isSel =
+                                    jeeSelectedSubtopics.includes(st);
+                                  return (
+                                    <motion.button
+                                      key={st}
+                                      className={`quiz-chapter-chip ${isSel ? "selected" : ""}`}
+                                      style={{ fontSize: "0.78rem" }}
+                                      onClick={() =>
+                                        setJeeSelectedSubtopics(
+                                          isSel
+                                            ? jeeSelectedSubtopics.filter(
+                                                (s) => s !== st,
+                                              )
+                                            : [...jeeSelectedSubtopics, st],
+                                        )
+                                      }
+                                      whileTap={{ scale: 0.97 }}
+                                    >
+                                      <span
+                                        className={`quiz-chip-check ${isSel ? "visible" : ""}`}
+                                      >
+                                        ✓
+                                      </span>
+                                      <span className="quiz-chip-text">
+                                        {st}
+                                      </span>
+                                    </motion.button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            <p
+                              style={{
+                                marginTop: 6,
+                                fontSize: "0.82rem",
+                                opacity: 0.6,
+                              }}
+                            >
+                              Leave blank to cover all subtopics ✅
+                            </p>
+                          </div>
                         )}
-                      </button>
-                    ) : (
-                      // Fresh chapter → go directly
-                      <button
-                        className="quiz-start-btn"
-                        onClick={handleGenerate}
-                        disabled={generating}
-                        style={{ flex: 1 }}
-                      >
-                        {generating ? (
-                          <>
-                            <div
-                              className="quiz-spinner"
-                              style={{ width: 18, height: 18, borderWidth: 2 }}
-                            />
-                            Generating...
-                          </>
-                        ) : (
-                          <>
-                            <span className="btn-shimmer" />
-                            Start Test
-                          </>
-                        )}
-                      </button>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* ── Step 3: Difficulty Level + Start ── */}
+                <AnimatePresence>
+                  {jeeSelectedChapters.length > 0 && (
+                    <motion.div
+                      className="quiz-glass-card"
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -12 }}
+                      transition={{ duration: 0.35, delay: 0.05 }}
+                    >
+                      <div className="quiz-section-label">
+                        <span className="quiz-section-num">3</span>
+                        <span>Select Difficulty Level</span>
+                      </div>
+                      <div className="jee-difficulty-grid">
+                        {DIFFICULTY_LEVELS.map((d) => (
+                          <motion.button
+                            key={String(d.value)}
+                            className={`jee-difficulty-card ${jeeDifficulty === d.value ? "selected" : ""}`}
+                            onClick={() => setJeeDifficulty(d.value)}
+                            whileTap={{ scale: 0.97 }}
+                          >
+                            <span
+                              className="jee-diff-badge"
+                              style={{ background: d.color }}
+                            >
+                              {d.badge}
+                            </span>
+                            <span className="jee-diff-label">{d.label}</span>
+                          </motion.button>
+                        ))}
+                      </div>
+
+                      {/* Start button */}
+                      <div style={{ marginTop: 20 }}>
+                        <button
+                          className="quiz-start-btn"
+                          onClick={handleJeeGenerate}
+                          disabled={generating}
+                          style={{ width: "100%" }}
+                        >
+                          {generating ? (
+                            <>
+                              <div
+                                className="quiz-spinner"
+                                style={{
+                                  width: 18,
+                                  height: 18,
+                                  borderWidth: 2,
+                                }}
+                              />
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <span className="btn-shimmer" />
+                              Start Test
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </>
+            )}
           </>
         )}
       </motion.div>

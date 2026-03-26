@@ -1982,3 +1982,31 @@ body:has(.quiz-result-wrapper) .chatbot-mascot__container,
 body:has(.quiz-result-wrapper) .chat-toggle-btn {
   display: none !important;
 }
+
+/* ── JEE Foundation level badges ── */
+.jee-result-badge {
+  display: inline-block;
+  padding: 4px 16px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.jee-result-badge.easy {
+  background: #dcfce7;
+  color: #15803d;
+}
+.jee-result-badge.medium {
+  background: #fef9c3;
+  color: #92400e;
+}
+.jee-result-badge.hard {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.jee-result-badge.mixed {
+  background: #e0e7ff;
+  color: #3730a3;
+}

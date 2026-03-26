@@ -140,6 +140,9 @@ const QuizQuestion = () => {
           selectedChapters: state?.selectedChapters, // ← ADD (already exists in some paths)
           selectedSubtopics: state?.selectedSubtopics, // ← ADD THIS
           questionsPerChapter: state?.questionsPerChapter,
+          // ── NEW: pass JEE Foundation context through ──
+          isJeeFoundation: state?.isJeeFoundation || false,
+          jeeDifficulty: state?.jeeDifficulty || null,
         },
       });
     } catch (err) {

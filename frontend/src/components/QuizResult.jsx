@@ -2183,21 +2183,16 @@ const QuizResult = () => {
                           prefill: {
                             classCode: boardSelection.classCode,
                             className: boardSelection.className,
-
                             subjectCode: boardSelection.subjectCode,
                             subjectName: boardSelection.subjectName,
-
                             chapterCode: boardSelection.chapterCode,
                             chapterName: boardSelection.chapterName,
-
                             subtopics: boardSelection.subtopics || [],
-
-                            // 🔑 IMPORTANT
                             source: "testprep",
-
-                            // helps wizard skip selection APIs
                             fromQuizResult: true,
                           },
+                          // NEW FLAG — skip wizard, go straight to QuestionListModal
+                          autoFetch: true,
                         }
                       : undefined,
                   });

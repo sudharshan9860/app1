@@ -488,17 +488,19 @@ export default function StudentWizard({
   const [loadingSubtopicList, setLoadingSubtopicList] = useState(false); // loading flag
   const [subtopicPath, setSubtopicPath] = useState(null); // "subtopics" | "questionType" | null
 
-  // Inside StudentWizard function body, after state declarations:
-  const stepLabels = isSubtopicPathSubject(selClass, selSub)
-    ? ["Class", "Subject", "Chapter", "Choose Path"]
-    : STEP_LABELS;
+  // subtopicList is set after confirmChapters runs.
+  // Show "Choose Path" label only if subtopics actually loaded.
+  const stepLabels =
+    subtopicList.length > 0
+      ? ["Class", "Subject", "Chapter", "Choose Path"]
+      : STEP_LABELS;
 
   // Which steps are "done" (for stepper)
   const completedSteps = [
     selClass && 0,
     selSub && 1,
     selChaps.length && 2,
-    isSubtopicPathSubject(selClass, selSub)
+    subtopicList.length > 0
       ? (subtopicPath === "subtopics" && selSubtopics.length > 0) ||
         (subtopicPath === "questionType" && selQType)
         ? 3
@@ -622,13 +624,11 @@ export default function StudentWizard({
     return () => clearTimeout(timer);
   }, [selChaps]); // eslint-disable-line
 
-  // Stage 4a: For subtopic-path subjects — auto-select subtopics path + subtopics
+  // Stage 4a: If subtopics loaded — auto-select subtopics path + codes
   useEffect(() => {
     if (prefillStageRef.current !== 4) return;
-    if (!isSubtopicPathSubject(selClass, selSub)) return;
-    if (subtopicList.length === 0) return; // still loading
+    if (subtopicList.length === 0) return; // still loading, or none available
 
-    // Set path to subtopics
     setSubtopicPath("subtopics");
 
     if (prefill?.subtopics?.length > 0) {
@@ -641,29 +641,28 @@ export default function StudentWizard({
           ),
         )
         .map((st) => st.updated_sub_topic_code);
-
-      if (matchedCodes.length > 0) {
-        setSelSubtopics(matchedCodes);
-      } else {
-        setSelSubtopics([subtopicList[0].updated_sub_topic_code]);
-      }
+      setSelSubtopics(
+        matchedCodes.length > 0
+          ? matchedCodes
+          : [subtopicList[0].updated_sub_topic_code],
+      );
     } else {
       setSelSubtopics([subtopicList[0].updated_sub_topic_code]);
     }
 
-    prefillStageRef.current = 5; // done
-  }, [prefill, subtopicList, selClass, selSub]); // eslint-disable-line
+    prefillStageRef.current = 5;
+  }, [prefill, subtopicList]); // eslint-disable-line
 
-  // Stage 4b: For non-subtopic-path subjects — auto-select first question type
+  // Stage 4b: No subtopics available — fall back to question type
   useEffect(() => {
     if (prefillStageRef.current !== 4) return;
-    if (isSubtopicPathSubject(selClass, selSub)) return; // handled above
-    if (qtOpts.length === 0) return; // still loading
+    if (subtopicList.length > 0) return; // handled by 4a
+    if (loadingSubtopicList) return; // still fetching, wait
+    if (qtOpts.length === 0) return; // question types not ready yet
 
-    // Auto-pick first question type to enable "Let's Begin"
     pickQType(qtOpts[0]);
-    prefillStageRef.current = 5; // done
-  }, [prefill, qtOpts, selClass, selSub]); // eslint-disable-line
+    prefillStageRef.current = 5;
+  }, [prefill, subtopicList, loadingSubtopicList, qtOpts]); // eslint-disable-line
 
   // Clear location state after prefill is fully applied (avoid re-triggering on back-nav)
   useEffect(() => {
@@ -767,21 +766,17 @@ export default function StudentWizard({
     }
   };
 
-  // ── Toggle chapter (multi-select) ──────────────────────────────────────────
+  // AFTER
+  // Always use multi-select. The single-select restriction was only needed
+  // because the subtopic API only accepted one topic at a time — but the
+  // new flow calls confirmChapters and then probes the API regardless.
+  // Multi-select is safe; the subtopic fetch uses selChaps[0] for the probe.
   const toggleChap = (ch) => {
-    if (isSubtopicPathSubject(selClass, selSub)) {
-      // Single-select for all subtopic-path subjects
-      setSelChaps((p) =>
-        p.length === 1 && p[0].topic_code === ch.topic_code ? [] : [ch],
-      );
-    } else {
-      // Multi-select for all other subjects
-      setSelChaps((p) =>
-        p.find((c) => c.topic_code === ch.topic_code)
-          ? p.filter((c) => c.topic_code !== ch.topic_code)
-          : [...p, ch],
-      );
-    }
+    setSelChaps((p) =>
+      p.find((c) => c.topic_code === ch.topic_code)
+        ? p.filter((c) => c.topic_code !== ch.topic_code)
+        : [...p, ch],
+    );
     // Reset downstream state
     setSelQType(null);
     setSelLevel(null);
@@ -791,59 +786,34 @@ export default function StudentWizard({
     setSelSubtopics([]);
   };
 
-  // ── Confirm chapters → load question types ─────────────────────────────────
   const confirmChapters = async () => {
     if (!selChaps.length) return;
     const sn = selSub?.subject_name || "";
 
-    // ── Subtopic-path subjects → fetch subtopics + show path choice ──
-    if (isSubtopicPathSubject(selClass, selSub)) {
-      setLoadingSubtopicList(true);
-      scrollTo(subtopicPathRef);
-      try {
-        const res = await axiosInstance.post(
-          "/backend/api/updated-subtopic-questions/",
-          {
-            classid: selClass.class_code,
-            subjectid: selSub.subject_code,
-            topicid: [selChaps[0].topic_code],
-            sub_topic_names: true,
-          },
-        );
-        setSubtopicList(res.data.subtopics || []);
-      } catch (e) {
-        console.error("Failed to fetch subtopics:", e);
-        setSubtopicList([]);
-      } finally {
-        setLoadingSubtopicList(false);
-      }
-      // Determine question-type options based on subject type
-      const sn = selSub?.subject_name || "";
-      if (isScience(sn)) {
-        // Science 6–10: fetch science question type availability
-        try {
-          const res2 = await axiosInstance.post("/question-images-paginator/", {
-            classid: selClass.class_code,
-            subjectid: selSub.subject_code,
-            topicid: selChaps.map((c) => c.topic_code),
-            external: true,
-          });
-          const subs = res2.data.subtopics || [];
-          setQtOpts(
-            subs.length
-              ? SCIENCE_TYPES.filter((t) => subs.includes(t.id))
-              : SCIENCE_TYPES,
-          );
-        } catch {
-          setQtOpts(SCIENCE_TYPES);
-        }
-      } else {
-        // Math 6–12 and Physics/Chemistry 11–12 use BOARD_TYPES
-        setQtOpts(BOARD_TYPES);
-      }
-      setSubtopicPath(null); // reset path choice
-      return; // don't fall through to the normal flow
+    // ── Always try to fetch subtopics first for any subject/class ──────────
+    setLoadingSubtopicList(true);
+    scrollTo(subtopicPathRef);
+    let fetchedSubtopics = [];
+    try {
+      const res = await axiosInstance.post(
+        "/backend/api/updated-subtopic-questions/",
+        {
+          classid: selClass.class_code,
+          subjectid: selSub.subject_code,
+          topicid: [selChaps[0].topic_code],
+          sub_topic_names: true,
+        },
+      );
+      fetchedSubtopics = res.data.subtopics || [];
+      setSubtopicList(fetchedSubtopics);
+    } catch (e) {
+      // API error = treat as no subtopics available, not a hard failure
+      setSubtopicList([]);
+    } finally {
+      setLoadingSubtopicList(false);
     }
+
+    // ── Always fetch question types too (needed for Path B or fallback) ────
     setLoadQT(true);
     scrollTo(qtypeRef);
     try {
@@ -876,11 +846,17 @@ export default function StudentWizard({
         setQtOpts(BOARD_TYPES);
       }
     } catch (e) {
-      console.error(e);
       setQtOpts(BOARD_TYPES);
     } finally {
       setLoadQT(false);
     }
+
+    // ── If subtopics came back, reset path choice so user picks ───────────
+    if (fetchedSubtopics.length > 0) {
+      setSubtopicPath(null); // user must choose Path A or Path B
+    }
+    // If subtopics is empty, no path choice is needed — the UI falls straight
+    // through to the question-type selector (same as the current non-subtopic flow).
   };
 
   // ── Pick question type → optionally fetch sub-selections ──────────────────
@@ -926,11 +902,9 @@ export default function StudentWizard({
   const isReady = () => {
     if (!selClass || !selSub || !selChaps.length) return false;
 
-    // Subtopic-path subjects: either subtopics or question type path
-    if (isSubtopicPathSubject(selClass, selSub)) {
-      if (subtopicPath === "subtopics") {
-        return selSubtopics.length > 0;
-      }
+    // If subtopics are available for this chapter, user must have picked a path
+    if (subtopicList.length > 0) {
+      if (subtopicPath === "subtopics") return selSubtopics.length > 0;
       if (subtopicPath === "questionType") {
         if (!selQType) return false;
         if (selQType.value === "external" && subTopics.length > 0 && !selLevel)
@@ -939,10 +913,10 @@ export default function StudentWizard({
           return false;
         return true;
       }
-      return false; // no path chosen yet
+      return false; // path not chosen yet
     }
 
-    // Default flow (unchanged)
+    // No subtopics available — normal question-type flow
     if (!selQType) return false;
     if (selQType.value === "external" && subTopics.length > 0 && !selLevel)
       return false;
@@ -957,10 +931,7 @@ export default function StudentWizard({
     const sn = selSub?.subject_name || "";
 
     // ── Subtopic-path subjects — subtopics route ──
-    if (
-      isSubtopicPathSubject(selClass, selSub) &&
-      subtopicPath === "subtopics"
-    ) {
+    if (subtopicList.length > 0 && subtopicPath === "subtopics") {
       const req = {
         classid: selClass.class_code,
         subjectid: selSub.subject_code,
@@ -1292,9 +1263,9 @@ export default function StudentWizard({
     Applies to: Math 6-12, Science 6-10, Physics/Chemistry 11-12
 ══════════════════════════════════════════════════════ */}
       <AnimatePresence>
-        {isSubtopicPathSubject(selClass, selSub) &&
-          selChaps.length === 1 &&
-          (subtopicList.length > 0 || qtOpts.length > 0) && (
+        {subtopicList.length > 0 &&
+          selChaps.length >= 1 &&
+          qtOpts.length > 0 && (
             <motion.div
               ref={subtopicPathRef}
               key="subtopic-path-section"

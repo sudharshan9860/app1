@@ -115,55 +115,7 @@ const QuizMode = () => {
   const [selectedQuiz, setSelectedQuiz] = useState(null);
   const [learningAnswers, setLearningAnswers] = useState({});
 
-  /**
-   * isSubjectWithSubtopics — returns true for subjects that support subtopic filtering:
-   *   - Mathematics (class 6–12, non-JEE)
-   *   - Science (class 6–10)
-   *   - Physics (class 11–12, non-JEE)
-   *   - Chemistry (class 11–12, non-JEE)
-   */
-  const isSubjectWithSubtopics = (() => {
-    if (!selectedClassObj || !selectedSubject || !selectedSubjectObj)
-      return false;
-
-    // Explicitly excluded subjects (e.g. Mathematics -3)
-    const EXCLUDED_SUBJECT_CODES = ["222"];
-    if (
-      EXCLUDED_SUBJECT_CODES.includes(String(selectedSubjectObj.subject_code))
-    )
-      return false;
-
-    const classNum = parseInt(
-      selectedClassObj.class_name.replace(/\D/g, ""),
-      10,
-    );
-    if (isNaN(classNum) || classNum < 6 || classNum > 12) return false;
-
-    const subjectLower = selectedSubject.toLowerCase();
-    const isJEE =
-      subjectLower.includes("jee") ||
-      subjectLower.includes("mains") ||
-      subjectLower.includes("advanced");
-    if (isJEE) return false;
-
-    const isMath =
-      (subjectLower.includes("mathematics") ||
-        subjectLower.includes("maths") ||
-        subjectLower.includes("math")) &&
-      classNum >= 6 &&
-      classNum <= 12;
-
-    const isScienceMid =
-      subjectLower.includes("science") && classNum >= 6 && classNum <= 10;
-
-    const isPhyChem11_12 =
-      (subjectLower.includes("physics") ||
-        subjectLower.includes("chemistry")) &&
-      classNum >= 11 &&
-      classNum <= 12;
-
-    return isMath || isScienceMid || isPhyChem11_12;
-  })();
+  const [hasSubtopics, setHasSubtopics] = useState(false);
 
   const [subtopics, setSubtopics] = useState([]); // NOW: [{updated_sub_topic_code, updated_sub_topic_name}]
   const [selectedSubtopics, setSelectedSubtopics] = useState([]); // NOW: string[] of subtopic NAMES (for generate payload)
@@ -357,12 +309,27 @@ const QuizMode = () => {
   useEffect(() => {
     setSubtopics([]);
     setSelectedSubtopics([]);
-    if (!isSubjectWithSubtopics || selectedChapters.length === 0) return;
+    setHasSubtopics(false);
+
+    // Skip JEE mode — it uses its own external API
+    if (quizMode === "jee_foundation") return;
+    // Skip if selections aren't ready
+    if (
+      !selectedClassObj ||
+      !selectedSubjectObj ||
+      selectedChapters.length === 0
+    )
+      return;
+    // Skip explicitly excluded subjects (e.g., Mathematics-3, code 222)
+    const EXCLUDED_SUBJECT_CODES = ["222"];
+    if (
+      EXCLUDED_SUBJECT_CODES.includes(String(selectedSubjectObj.subject_code))
+    )
+      return;
 
     const loadSubtopics = async () => {
       setLoadingSubtopics(true);
       try {
-        // Fetch subtopics for all selected chapters in parallel
         const results = await Promise.all(
           selectedChapters.map((ch) =>
             axiosInstance
@@ -376,7 +343,6 @@ const QuizMode = () => {
               .catch(() => []),
           ),
         );
-        // Flatten, deduplicate by code
         const allSubs = results.flat();
         const uniqueMap = new Map();
         allSubs.forEach((s) => {
@@ -384,15 +350,18 @@ const QuizMode = () => {
             uniqueMap.set(s.updated_sub_topic_code, s);
           }
         });
-        setSubtopics([...uniqueMap.values()]); // [{updated_sub_topic_code, updated_sub_topic_name}]
+        const deduped = [...uniqueMap.values()];
+        setSubtopics(deduped);
+        setHasSubtopics(deduped.length > 0); // ← this drives the UI
       } catch (e) {
         setSubtopics([]);
+        setHasSubtopics(false);
       } finally {
         setLoadingSubtopics(false);
       }
     };
     loadSubtopics();
-  }, [selectedChapters, selectedClassObj, selectedSubjectObj, selectedSubject]);
+  }, [selectedChapters, selectedClassObj, selectedSubjectObj, quizMode]); // eslint-disable-line
 
   const toggleChapter = useCallback((ch) => {
     setSelectedChapters(
@@ -421,9 +390,7 @@ const QuizMode = () => {
       ? 2
       : selectedChapters.length === 0
         ? 3
-        : isSubjectWithSubtopics
-          ? 4 // ← always 4 once chapter chosen (subtopic optional)
-          : 4; // non-Math also 4
+        : 4;
 
   const jeeCurrentStep = !jeeSelectedClass
     ? 1
@@ -590,30 +557,27 @@ const QuizMode = () => {
       );
       const classNum = Number(selectedClassObj.class_name.replace(/\D/g, ""));
 
-      // Determine which subtopic names to send:
-      // - user picked some  → send only those
-      // - user picked none  → send ALL available subtopic names (default = cover all)
-      const subtopicsToSend =
-        selectedSubtopics.length > 0
-          ? selectedSubtopics // user's selection
-          : subtopics.map((st) => st.updated_sub_topic_name); // all available
+      const subtopicsToSend = hasSubtopics
+        ? selectedSubtopics.length > 0
+          ? selectedSubtopics
+          : subtopics.map((st) => st.updated_sub_topic_name)
+        : [];
 
-      const payload = isSubjectWithSubtopics
-        ? {
-            class_num: classNum,
-            chapters: chapterNames,
-            questions_per_chapter: questionsPerChapter,
-            subject: selectedSubject, // preserves "Mathematics - 2" etc.
-            ...(subtopicsToSend.length > 0 && {
+      const payload =
+        hasSubtopics && subtopicsToSend.length > 0
+          ? {
+              class_num: classNum,
+              chapters: chapterNames,
+              questions_per_chapter: questionsPerChapter,
+              subject: selectedSubject,
               sub_topics: subtopicsToSend,
-            }),
-          }
-        : {
-            class_num: classNum,
-            chapters: chapterNames,
-            questions_per_chapter: questionsPerChapter,
-            subject: selectedSubject,
-          };
+            }
+          : {
+              class_num: classNum,
+              chapters: chapterNames,
+              questions_per_chapter: questionsPerChapter,
+              subject: selectedSubject,
+            };
 
       const res = await generateQuestions(payload);
       navigate("/quiz-question", {
@@ -632,7 +596,7 @@ const QuizMode = () => {
             subjectName: selectedSubjectObj.subject_name,
             chapterCode: selectedChapters[0]?.topic_code,
             chapterName: formatChapterName(selectedChapters[0]?.name),
-            subtopics: selectedSubtopics, // string[] of selected subtopic names (may be empty)
+            subtopics: hasSubtopics ? selectedSubtopics : [], // pass only if subtopics are involved
           },
         },
       });
@@ -734,37 +698,53 @@ const QuizMode = () => {
           <span className="quiz-breadcrumb-current">Test Prep</span>
         </nav>
 
-        {/* Header */}
-        <div className="quiz-mode-header">
-          {/* ── Board / JEE Foundation Toggle ── */}
-          <div className="quiz-mode-toggle-row">
+        {/* ── HERO BANNER ── */}
+        <div className="quiz-mode-hero">
+          <div className="quiz-mode-hero-top">
+            <div>
+              <h1 className="quiz-mode-hero-title">
+                Test <span>Prep</span>
+              </h1>
+              <p className="quiz-mode-hero-subtitle">
+                AI-generated MCQs — challenge yourself, track your bridges
+              </p>
+            </div>
+            <div className="quiz-mode-toggle-pill">
+              <button
+                className={quizMode === "board" ? "active" : ""}
+                onClick={() => setQuizMode("board")}
+              >
+                📚 Board
+              </button>
+              <button
+                className={quizMode === "jee_foundation" ? "active" : ""}
+                onClick={() => setQuizMode("jee_foundation")}
+              >
+                🏆 JEE Foundation
+              </button>
+            </div>
+          </div>
+          <div className="quiz-mode-hero-meta">
+            <span className="quiz-mode-hero-badge">✦ AI-powered MCQs</span>
+            <span className="quiz-mode-hero-badge">
+              ⚡ Instant bridge analysis
+            </span>
             <button
-              className={`quiz-mode-toggle-btn ${quizMode === "board" ? "active" : ""}`}
-              onClick={() => setQuizMode("board")}
+              className="quiz-prev-path-btn-hero"
+              onClick={handlePrevLearningPath}
             >
-              📚 Board
-            </button>
-            <button
-              className={`quiz-mode-toggle-btn ${quizMode === "jee_foundation" ? "active" : ""}`}
-              onClick={() => setQuizMode("jee_foundation")}
-            >
-              🏆 JEE Foundation
+              🔁 Previous Learning Path
             </button>
           </div>
-          <p>
-            Select your class and chapters, then challenge yourself with
-            AI-generated MCQ questions
-          </p>
-          <button
-            className="quiz-prev-path-btn"
-            onClick={handlePrevLearningPath}
-          >
-            Previous Learning Path
-          </button>
         </div>
 
-        {/* Score Breakdown Graph */}
-        <div style={{ marginBottom: 24 }}>
+        {/* Score Breakdown Graph — wrapped in a card */}
+        <div className="quiz-score-graph-card">
+          <div className="quiz-score-graph-card-header">
+            <span className="quiz-score-graph-card-title">
+              📊 Subject-wise Score Breakdown
+            </span>
+          </div>
           <QuizScoreGraph quizMode={quizMode} />
         </div>
 
@@ -795,7 +775,7 @@ const QuizMode = () => {
                   { num: 1, label: "Class", desc: "Select class" },
                   { num: 2, label: "Subject", desc: "Pick subject" },
                   { num: 3, label: "Chapter", desc: "Pick a topic" },
-                  ...(isSubjectWithSubtopics
+                  ...(hasSubtopics
                     ? [{ num: 4, label: "Subtopics", desc: "Filter subtopics" }]
                     : []),
                 ].map((step, i) => (
@@ -980,7 +960,7 @@ const QuizMode = () => {
                   )}
                 </AnimatePresence>
 
-                {isSubjectWithSubtopics && selectedChapters.length > 0 && (
+                {hasSubtopics && selectedChapters.length > 0 && (
                   <motion.div
                     className="quiz-glass-card"
                     initial={{ opacity: 0, y: 16 }}

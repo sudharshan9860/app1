@@ -43,6 +43,11 @@ const QuizQuestion = () => {
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef(null);
 
+  // ── Scroll to top when question page first loads ──
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, []); // empty deps — runs once on mount only
+
   useEffect(() => {
     if (!quizData) return;
     timerRef.current = setInterval(() => setElapsed((p) => p + 1), 1000);
@@ -414,12 +419,221 @@ const QuizQuestion = () => {
         </AnimatePresence>
       )}
 
-      {/* Evaluating overlay */}
+      {/* ── Evaluating overlay v2 ── */}
+      {/* ── Evaluating overlay v3 — GPU composited ── */}
       {evaluating && (
         <div className="quiz-evaluating-overlay">
-          <div className="quiz-spinner" />
-          <h3>Evaluating your answers...</h3>
-          <p>Our AI is analyzing your responses</p>
+          {/* Floating particles — translateY + opacity only */}
+          <div className="eval-particles">
+            {[
+              {
+                x: "7%",
+                d: "5s",
+                dl: "0s",
+                sz: "5px",
+                bg: "rgba(99,102,241,0.8)",
+              },
+              {
+                x: "14%",
+                d: "6.2s",
+                dl: "0.8s",
+                sz: "7px",
+                bg: "rgba(139,92,246,0.7)",
+              },
+              {
+                x: "23%",
+                d: "4.4s",
+                dl: "1.3s",
+                sz: "4px",
+                bg: "rgba(192,132,252,0.65)",
+              },
+              {
+                x: "33%",
+                d: "7s",
+                dl: "0.3s",
+                sz: "6px",
+                bg: "rgba(99,102,241,0.6)",
+              },
+              {
+                x: "44%",
+                d: "5.5s",
+                dl: "1.9s",
+                sz: "4px",
+                bg: "rgba(139,92,246,0.8)",
+              },
+              {
+                x: "56%",
+                d: "4.8s",
+                dl: "0.6s",
+                sz: "7px",
+                bg: "rgba(99,102,241,0.55)",
+              },
+              {
+                x: "66%",
+                d: "6.8s",
+                dl: "2.2s",
+                sz: "5px",
+                bg: "rgba(192,132,252,0.7)",
+              },
+              {
+                x: "76%",
+                d: "5.2s",
+                dl: "1.6s",
+                sz: "4px",
+                bg: "rgba(139,92,246,0.65)",
+              },
+              {
+                x: "84%",
+                d: "7.2s",
+                dl: "1s",
+                sz: "6px",
+                bg: "rgba(99,102,241,0.7)",
+              },
+              {
+                x: "92%",
+                d: "4.2s",
+                dl: "2.5s",
+                sz: "5px",
+                bg: "rgba(192,132,252,0.55)",
+              },
+            ].map((p, i) => (
+              <div
+                key={i}
+                className="eval-particle"
+                style={{
+                  "--px": p.x,
+                  "--pd": p.d,
+                  "--pdl": p.dl,
+                  "--psz": p.sz,
+                  "--pbg": p.bg,
+                }}
+              />
+            ))}
+          </div>
+
+          {/* Orbit system */}
+          <div className="eval-orbit-container">
+            <div className="eval-glow-inner" />
+            <div className="eval-glow-inner2" />
+
+            <div className="eval-ring eval-ring-1" />
+            <div className="eval-ring eval-ring-2" />
+            <div className="eval-ring eval-ring-3" />
+
+            {/*
+        Arm-node pattern:
+        - The arm div rotates (evalSpinCW / evalSpinCCW)
+        - The node div just sits at a fixed translateX — no CSS var in transform
+        This lets the browser composite each arm on its own GPU layer
+      */}
+
+            {/* Outer ring — 3 arms, 120° apart, each with its own delay */}
+            <div
+              className="eval-dot-arm"
+              style={{
+                "--arm-t": "2s",
+                "--arm-dl": "0s",
+                transform: "rotate(0deg)",
+              }}
+            >
+              <div
+                className="eval-dot-node"
+                style={{
+                  "--dot-c": "#6366f1",
+                  "--dot-sz": "10px",
+                  "--dot-r": "107px",
+                }}
+              />
+            </div>
+            <div
+              className="eval-dot-arm"
+              style={{
+                "--arm-t": "2s",
+                "--arm-dl": "0s",
+                transform: "rotate(120deg)",
+              }}
+            >
+              <div
+                className="eval-dot-node"
+                style={{
+                  "--dot-c": "#8b5cf6",
+                  "--dot-sz": "10px",
+                  "--dot-r": "107px",
+                }}
+              />
+            </div>
+            <div
+              className="eval-dot-arm"
+              style={{
+                "--arm-t": "2s",
+                "--arm-dl": "0s",
+                transform: "rotate(240deg)",
+              }}
+            >
+              <div
+                className="eval-dot-node"
+                style={{
+                  "--dot-c": "#c084fc",
+                  "--dot-sz": "10px",
+                  "--dot-r": "107px",
+                }}
+              />
+            </div>
+
+            {/* Middle ring — 1 slower dot */}
+            <div
+              className="eval-dot-arm ccw"
+              style={{
+                "--arm-t": "2.8s",
+                "--arm-dl": "0s",
+                transform: "rotate(60deg)",
+              }}
+            >
+              <div
+                className="eval-dot-node"
+                style={{
+                  "--dot-c": "rgba(139,92,246,0.75)",
+                  "--dot-sz": "7px",
+                  "--dot-r": "87px",
+                }}
+              />
+            </div>
+
+            <div className="eval-brain">🧠</div>
+          </div>
+
+          {/* Text + progress */}
+          <div className="eval-text-section">
+            <h3 className="eval-title">Evaluating your answers…</h3>
+            <p className="eval-subtitle">
+              Our AI is scanning your bridge knowledge
+            </p>
+
+            {/* Progress bar — scaleX transform, sheen overlay */}
+            <div className="eval-bar-track" style={{ position: "relative" }}>
+              <div className="eval-bar-fill" />
+              <div className="eval-bar-sheen" />
+            </div>
+            <div className="eval-bar-label">Analysing…</div>
+
+            <div className="eval-tips">
+              <div className="eval-tip-highlight">
+                <span style={{ fontSize: 16 }}>⚡</span>
+                <span>
+                  Analysing {questions.length} question
+                  {questions.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+              <div className="eval-tip-row" style={{ "--tip-dl": "0.4s" }}>
+                <span style={{ fontSize: 16 }}>🔗</span>
+                <span>Identifying concept bridges &amp; gaps</span>
+              </div>
+              <div className="eval-tip-row" style={{ "--tip-dl": "0.8s" }}>
+                <span style={{ fontSize: 16 }}>📋</span>
+                <span>Preparing your personalised report</span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

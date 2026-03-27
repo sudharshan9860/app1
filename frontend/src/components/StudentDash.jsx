@@ -32,6 +32,7 @@ function StudentDash({ jeeMode = false }) {
 
   const location = useLocation();
   const prefillData = location.state?.prefill || null;
+  const autoFetch = location.state?.autoFetch || false; // ← ADD THIS LINE
 
   // Tutorial context
   const {
@@ -604,6 +605,150 @@ function StudentDash({ jeeMode = false }) {
   }, [selectedClass, isJeeMode]);
 
   // Fetch chapters
+
+  // ── AUTO-FETCH: "Go to Self Study" from QuizResult skips wizard ──────────────
+  useEffect(() => {
+    if (!autoFetch || !prefillData) return;
+
+    const {
+      classCode,
+      subjectCode,
+      chapterCode,
+      subtopics, // string[] of subtopic NAMES (e.g. ["Basic Proportionality Theorem"])
+    } = prefillData;
+
+    if (!classCode || !subjectCode || !chapterCode) return;
+
+    // Clear location state so back-navigation doesn't re-trigger
+    window.history.replaceState({}, document.title);
+
+    const hasSubtopics = Array.isArray(subtopics) && subtopics.length > 0;
+
+    setIsLoading(true);
+
+    if (hasSubtopics) {
+      // ── Step 1: resolve subtopic NAMES → subtopic CODES ──────────────────────
+      // The API needs sub_topic_code (numeric array), but boardSelection only
+      // stores human-readable sub_topic_names. We call with sub_topic_names: true
+      // first to get the full list, then match by name to extract the codes.
+      axiosInstance
+        .post("/backend/api/updated-subtopic-questions/", {
+          classid: classCode,
+          subjectid: subjectCode,
+          topicid: [chapterCode],
+          sub_topic_names: true,
+        })
+        .then((res) => {
+          const allSubtopics = res.data.subtopics || [];
+          // allSubtopics: [{ updated_sub_topic_code, updated_sub_topic_name }, ...]
+
+          // Match the stored name strings against the returned list
+          const subtopicNameSet = new Set(
+            subtopics.map((n) => n.toLowerCase().trim()),
+          );
+
+          const matchedCodes = allSubtopics
+            .filter((st) =>
+              subtopicNameSet.has(
+                (st.updated_sub_topic_name || "").toLowerCase().trim(),
+              ),
+            )
+            .map((st) => st.updated_sub_topic_code);
+
+          // If no codes matched (name mismatch), fall back to all subtopics
+          const codesToUse =
+            matchedCodes.length > 0
+              ? matchedCodes
+              : allSubtopics.map((st) => st.updated_sub_topic_code);
+
+          // ── Step 2: fetch actual questions with sub_topic_code ────────────────
+          return axiosInstance.post(
+            "/backend/api/updated-subtopic-questions/",
+            {
+              classid: classCode,
+              subjectid: subjectCode,
+              topicid: [chapterCode],
+              sub_topic_code: codesToUse, // ← this is what the API expects
+            },
+          );
+        })
+        .then((res) => {
+          const results = res.data.questions || res.data.results || [];
+          const questionsWithImages = results.map((q, idx) => ({
+            ...q,
+            id: idx,
+            question_id: q.id,
+            question: q.question,
+            context: q.context || null,
+            image: q.question_image ? `${q.question_image}` : null,
+          }));
+
+          setSelectedClass(classCode);
+          setSelectedSubject(subjectCode);
+          setSelectedChapters([chapterCode]);
+          setQuestionType("subtopics");
+          setQuestionList(questionsWithImages);
+          setSelectedQuestions([]);
+          setPaginationInfo({
+            next: res.data.next || null,
+            previous: res.data.previous || null,
+            count: res.data.count || results.length,
+            currentPage: 1,
+            totalPages: Math.ceil((res.data.count || results.length) / 15),
+            isLoading: false,
+          });
+          setShowQuestionList(true);
+          setIsLoading(false);
+        })
+        .catch((err) => {
+          console.error("autoFetch subtopic error:", err);
+          setIsLoading(false);
+          showAlert("Failed to load questions. Please try again.", "error");
+        });
+    } else {
+      // ── No subtopics: fetch all questions for the chapter via question-images ──
+      axiosInstance
+        .post("/question-images/", {
+          classid: Number(classCode),
+          subjectid: Number(subjectCode),
+          topicid: [chapterCode],
+          exercise: true,
+        })
+        .then((res) => {
+          const questions = (res.data?.questions || []).map((q, idx) => ({
+            ...q,
+            id: idx,
+            question_id: q.id,
+            question: q.question,
+            context: q.context || null,
+            image: q.question_image ? `${q.question_image}` : null,
+          }));
+
+          setSelectedClass(Number(classCode));
+          setSelectedSubject(Number(subjectCode));
+          setSelectedChapters([chapterCode]);
+          setQuestionType("exercise");
+          setQuestionList(questions);
+          setSelectedQuestions([]);
+          setPaginationInfo({
+            next: res.data.next || null,
+            previous: res.data.previous || null,
+            count: res.data.count || questions.length,
+            currentPage: 1,
+            totalPages: Math.ceil((res.data.count || questions.length) / 15),
+            isLoading: false,
+          });
+          setShowQuestionList(true);
+          setIsLoading(false);
+        })
+        .catch((err) => {
+          console.error("autoFetch question-images error:", err);
+          setIsLoading(false);
+          showAlert("Failed to load questions. Please try again.", "error");
+        });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     async function fetchChapters() {
       if (selectedSubject && selectedClass) {

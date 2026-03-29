@@ -82,7 +82,7 @@ const QuizMode = () => {
     { value: "Hard", label: "Level 3 — Hard", badge: "L3", color: "#dc2626" },
   ];
 
-  const ALLOWED_SUBJECTS = ["mathematics", "physics", "science"]; // lowercase for filtering
+  const ALLOWED_SUBJECTS = ["mathematics", "physics", "chemistry", "science"]; // lowercase for filtering
 
   const [subjects, setSubjects] = useState([]); // NEW: [{subject_code, subject_name}]
   const [selectedSubjectObj, setSelectedSubjectObj] = useState(null); // NEW: full object
@@ -878,9 +878,11 @@ const QuizMode = () => {
                           const name = sub.subject_name.toUpperCase();
                           const icon = name.includes("PHYSICS")
                             ? "⚛️"
-                            : name.includes("SCIENCE")
-                              ? "🔬"
-                              : "📐";
+                            : name.includes("CHEMISTRY")
+                              ? "🧪"
+                              : name.includes("SCIENCE")
+                                ? "🔬"
+                                : "📐";
                           return (
                             <motion.button
                               key={sub.subject_code}
@@ -890,9 +892,11 @@ const QuizMode = () => {
                                 setSelectedSubject(
                                   name.includes("PHYSICS")
                                     ? "PHYSICS"
-                                    : name.includes("SCIENCE")
-                                      ? "SCIENCE"
-                                      : "MATHEMATICS",
+                                    : name.includes("CHEMISTRY")
+                                      ? "CHEMISTRY"
+                                      : name.includes("SCIENCE")
+                                        ? "SCIENCE"
+                                        : "MATHEMATICS",
                                 );
                               }}
                               whileTap={{ scale: 0.96 }}

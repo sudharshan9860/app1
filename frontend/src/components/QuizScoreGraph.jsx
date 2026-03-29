@@ -20,20 +20,18 @@ const TARGET_ZONE_MIN = 75;
 const DANGER_ZONE_MAX = 35;
 const DEFAULT_SUBJECT = "Mathematics";
 
-const QUIZ_COLORS = [
-  "#00A0E3",
-  "#60a5fa",
-  "#4ade80",
-  "#f472b6",
-  "#38bdf8",
-  "#fbbf24",
-  "#a78bfa",
-  "#34d399",
-  "#f87171",
-  "#67e8f9",
+// NELO brand colours — fixed 4-slot palette
+// Slot 0 = most recent attempt, slot 3 = oldest of the 4 shown
+const NELO_COLORS = [
+  "#4F8EF7", // Blue   — 1st (most recent)
+  "#F5A623", // Orange — 2nd
+  "#1AA05C", // Green  — 3rd
+  "#D0232A", // Red    — 4th (oldest shown)
 ];
 
-const getQuizColor = (idx) => QUIZ_COLORS[idx % QUIZ_COLORS.length];
+const MAX_ATTEMPTS = 4;
+
+const getQuizColor = (idx) => NELO_COLORS[idx % NELO_COLORS.length];
 
 /* -- truncate long chapter names for X-axis -- */
 const TruncatedTick = ({ x, y, payload }) => {
@@ -251,18 +249,32 @@ const QuizScoreGraph = ({ quizMode = "board" }) => {
     if (!rawQuizzes || !selectedSubject)
       return { chartData: [], quizLabels: [], quizColorMap: {}, stats: null };
 
-    const filtered = rawQuizzes.filter((quiz) => {
+    const allFiltered = rawQuizzes.filter((quiz) => {
       const subject = quiz.graph_data?.subject || DEFAULT_SUBJECT;
       return subject === selectedSubject;
     });
 
-    if (filtered.length === 0)
+    if (allFiltered.length === 0)
       return { chartData: [], quizLabels: [], quizColorMap: {}, stats: null };
 
-    const labels = filtered.map((_, i) => `Test ${i + 1}`);
+    // Keep only the 4 most recent attempts (last MAX_ATTEMPTS from the array)
+    // The backend returns quizzes in chronological order (oldest first),
+    // so we slice from the end.
+    const filtered = allFiltered.slice(-MAX_ATTEMPTS);
+
+    // Label them relative to how many total attempts exist, so "Test 40" still
+    // reads correctly even though we only render 4 bars per chapter.
+    const totalOffset = allFiltered.length - filtered.length;
+    const labels = filtered.map((_, i) => `Test ${totalOffset + i + 1}`);
+
     const colorMap = {};
-    labels.forEach((q, i) => {
-      colorMap[q] = getQuizColor(i);
+    // Index into NELO_COLORS by position within the 4 shown (0 = newest shown)
+    // We want: newest attempt → Blue (index 0), next → Orange (1), etc.
+    // filtered[0] is the oldest of the 4 shown, filtered[3] is the newest.
+    filtered.forEach((_, i) => {
+      // Reverse so newest = index 0 in the palette
+      const paletteIdx = filtered.length - 1 - i;
+      colorMap[labels[i]] = NELO_COLORS[paletteIdx];
     });
 
     const chapterMap = {};
@@ -307,7 +319,7 @@ const QuizScoreGraph = ({ quizMode = "board" }) => {
       quizLabels: activeLabels,
       quizColorMap: colorMap,
       stats: {
-        totalQuizzes: filtered.length,
+        totalQuizzes: allFiltered.length, // total ever, not just 4 shown
         chapters: data.length,
         bestScore,
       },
@@ -580,7 +592,45 @@ const QuizScoreGraph = ({ quizMode = "board" }) => {
           )}
         </div>
 
-        <div className="flex items-center justify-center gap-6 mt-4 pt-3 border-t border-gray-100">
+        {/* ── Attempt colour legend ── */}
+        {quizLabels.length > 0 && (
+          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mt-4 pt-3 border-t border-gray-100">
+            {quizLabels.map((label, i) => {
+              const totalShown = quizLabels.length;
+              // Position from newest: quizLabels last item = newest attempt
+              const posFromNewest = totalShown - 1 - i;
+              const attemptLabel =
+                posFromNewest === 0
+                  ? "Latest attempt"
+                  : posFromNewest === 1
+                    ? "2nd latest"
+                    : posFromNewest === 2
+                      ? "3rd latest"
+                      : "4th latest";
+              return (
+                <div
+                  key={label}
+                  className="flex items-center gap-1.5 text-xs text-gray-600"
+                >
+                  <span
+                    className="w-3 h-3 rounded-sm flex-shrink-0"
+                    style={{ background: quizColorMap[label] }}
+                  />
+                  <span
+                    className="font-medium"
+                    style={{ color: quizColorMap[label] }}
+                  >
+                    {attemptLabel}
+                  </span>
+                  <span className="text-gray-400">({label})</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ── Zone legend ── */}
+        <div className="flex items-center justify-center gap-6 mt-2 pt-2 border-t border-gray-100">
           <div className="flex items-center gap-2 text-xs text-gray-600">
             <span className="w-3 h-3 rounded-sm bg-green-500/20 border border-green-500/30" />
             <span>Target Zone</span>

@@ -711,21 +711,8 @@ export default function StudentWizard({
           );
         });
       } else {
-        data = data.filter((s) => {
-          const n = s.subject_name.toLowerCase();
-          if (
-            is8to10 &&
-            (n.includes("jee_foundation") || n.includes("jee foundation"))
-          )
-            return true;
-          return !(
-            n.includes("jee") ||
-            n.includes("mathematics_mains") ||
-            n.includes("mathematics_advanced") ||
-            n.includes("physics_mains") ||
-            n.includes("chemistry_mains")
-          );
-        });
+        // Show all subjects returned by the backend — no client-side filtering.
+        // data is already the full list; nothing to remove here.
       }
       setSubjects(data);
     } catch (e) {
@@ -784,6 +771,7 @@ export default function StudentWizard({
     setSubtopicPath(null);
     setSubtopicList([]);
     setSelSubtopics([]);
+    setQtOpts([]);
   };
 
   const confirmChapters = async () => {
@@ -1658,7 +1646,7 @@ export default function StudentWizard({
           STEP 3 — QUESTION TYPE
       ══════════════════════════════════════════════════════ */}
       <AnimatePresence>
-        {qtOpts.length > 0 && !isSubtopicPathSubject(selClass, selSub) && (
+        {qtOpts.length > 0 && subtopicList.length === 0 && (
           <motion.div
             ref={qtypeRef}
             key="qtype-section"

@@ -544,22 +544,9 @@ function StudentDash({ jeeMode = false }) {
               filteredSubjects.map((s) => s.subject_name),
             );
           } else {
-            filteredSubjects = subjectsData.filter((subject) => {
-              const sn = subject.subject_name.toLowerCase();
-              if (
-                isFoundationClass &&
-                (sn.includes("jee_foundation") || sn.includes("jee foundation"))
-              ) {
-                return true;
-              }
-              return !(
-                sn.includes("jee") ||
-                sn.includes("mathematics_mains") ||
-                sn.includes("mathematics_advanced") ||
-                sn.includes("physics_mains") ||
-                sn.includes("chemistry_mains")
-              );
-            });
+            // Show all subjects returned by the backend — no client-side filtering.
+            // When the backend adds or removes subjects, this UI updates automatically.
+            filteredSubjects = subjectsData;
             console.log(
               "📚 Board Subjects:",
               filteredSubjects.map((s) => s.subject_name),
@@ -912,7 +899,7 @@ function StudentDash({ jeeMode = false }) {
         setSelectedClass(meta.selClass.class_code);
         setSelectedSubject(meta.selSub.subject_code);
         setSelectedChapters(meta.selChaps.map((c) => c.topic_code));
-        setSubjects([meta.selSub]);
+        setSelectedSubject(meta.selSub.subject_code);
         setChapters(meta.selChaps);
         setQuestionType(meta.selQType.value);
         setQuestionLevel(meta.selLevel || "");

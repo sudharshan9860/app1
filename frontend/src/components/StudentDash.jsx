@@ -591,18 +591,264 @@ function StudentDash({ jeeMode = false }) {
     fetchSubjects();
   }, [selectedClass, isJeeMode]);
 
-  // Fetch chapters
-
   // ── AUTO-FETCH: "Go to Self Study" from QuizResult skips wizard ──────────────
   useEffect(() => {
+    // Guard: only run when explicitly triggered from a quiz result
     if (!autoFetch || !prefillData) return;
 
-    const {
-      classCode,
-      subjectCode,
-      chapterCode,
-      subtopics, // string[] of subtopic NAMES (e.g. ["Basic Proportionality Theorem"])
-    } = prefillData;
+    // ── JEE Foundation path ───────────────────────────────────────────────────
+    // JEE Foundation prefill has classCode (number string like "8"),
+    // subjectCode (quiz-API string like "JEE_FOUNDATION_MATH"),
+    // chapterName (plain text like "Triangles") — no Board topic_code.
+    // We resolve Board IDs via existing APIs and open the question list directly.
+    if (prefillData.isJeeFoundation) {
+      // Clear location state so back-navigation doesn't re-trigger
+      window.history.replaceState({}, document.title);
+      setIsLoading(true);
+
+      // ── Fast path: exact Board IDs available (jeeSelection passed from QuizMode) ──
+      if (
+        prefillData.hasExactBoardIds &&
+        prefillData.classCode &&
+        prefillData.subjectCode &&
+        prefillData.chapterCode
+      ) {
+        const boardClassCode = prefillData.classCode; // e.g. "10"
+        const boardSubjectCode = prefillData.subjectCode; // e.g. "6"
+        const boardChapterCode = prefillData.chapterCode; // e.g. "5"
+        const subtopics = prefillData.subtopics || [];
+
+        (async () => {
+          try {
+            if (subtopics.length > 0) {
+              // Fetch subtopic-filtered questions
+              const subRes = await axiosInstance.post(
+                "/backend/api/updated-subtopic-questions/",
+                {
+                  classid: boardClassCode,
+                  subjectid: boardSubjectCode,
+                  topicid: [boardChapterCode],
+                  sub_topic_names: true,
+                },
+              );
+              const allSubs = subRes.data.subtopics || [];
+              const nameSet = new Set(
+                subtopics.map((n) => n.toLowerCase().trim()),
+              );
+              const matched = allSubs.filter((s) =>
+                nameSet.has(
+                  (s.updated_sub_topic_name || "").toLowerCase().trim(),
+                ),
+              );
+              const codes =
+                matched.length > 0
+                  ? matched.map((s) => s.updated_sub_topic_code)
+                  : allSubs.map((s) => s.updated_sub_topic_code);
+
+              const qRes = await axiosInstance.post(
+                "/backend/api/updated-subtopic-questions/",
+                {
+                  classid: boardClassCode,
+                  subjectid: boardSubjectCode,
+                  topicid: [boardChapterCode],
+                  sub_topic_code: codes,
+                },
+              );
+              const results = (
+                qRes.data.questions ||
+                qRes.data.results ||
+                []
+              ).map((q, idx) => ({
+                ...q,
+                id: idx,
+                question_id: q.id,
+                question: q.question,
+                context: q.context || null,
+                image: q.question_image ? `${q.question_image}` : null,
+              }));
+              setSelectedClass(boardClassCode);
+              setSelectedSubject(boardSubjectCode);
+              setSelectedChapters([boardChapterCode]);
+              setQuestionType("subtopics");
+              setQuestionList(results);
+              setSelectedQuestions([]);
+              setPaginationInfo({
+                next: qRes.data.next || null,
+                previous: qRes.data.previous || null,
+                count: qRes.data.count || results.length,
+                currentPage: 1,
+                totalPages: Math.ceil((qRes.data.count || results.length) / 15),
+                isLoading: false,
+              });
+            } else {
+              // Fetch all exercise questions for the chapter
+              const qRes = await axiosInstance.post("/question-images/", {
+                classid: Number(boardClassCode),
+                subjectid: Number(boardSubjectCode),
+                topicid: [boardChapterCode],
+                exercise: true,
+              });
+              const results = (qRes.data?.questions || []).map((q, idx) => ({
+                ...q,
+                id: idx,
+                question_id: q.id,
+                question: q.question,
+                context: q.context || null,
+                image: q.question_image ? `${q.question_image}` : null,
+              }));
+              setSelectedClass(Number(boardClassCode));
+              setSelectedSubject(Number(boardSubjectCode));
+              setSelectedChapters([boardChapterCode]);
+              setQuestionType("exercise");
+              setQuestionList(results);
+              setSelectedQuestions([]);
+              setPaginationInfo({
+                next: qRes.data.next || null,
+                previous: qRes.data.previous || null,
+                count: qRes.data.count || results.length,
+                currentPage: 1,
+                totalPages: Math.ceil((qRes.data.count || results.length) / 15),
+                isLoading: false,
+              });
+            }
+            setShowQuestionList(true);
+            setIsLoading(false);
+          } catch (err) {
+            console.error("JEE Foundation fast-path autoFetch error:", err);
+            setIsLoading(false);
+            showAlert("Failed to load questions. Please try again.", "error");
+          }
+        })();
+
+        return;
+      }
+
+      // ── Slow path: no exact Board IDs — resolve by fuzzy matching ──
+      const jeeClassNum = String(prefillData.classCode || "");
+      const jeeChapterName = String(prefillData.chapterName || "");
+
+      if (!jeeClassNum || !jeeChapterName) {
+        setIsLoading(false);
+        return;
+      }
+
+      (async () => {
+        try {
+          const classRes = await axiosInstance.get("/classes/");
+          const allClasses = classRes.data.data || [];
+          const matchedClass = allClasses.find((c) =>
+            c.class_name.includes(jeeClassNum),
+          );
+          if (!matchedClass) {
+            setIsLoading(false);
+            showAlert(
+              `Class ${jeeClassNum} not found in Board subjects.`,
+              "error",
+            );
+            return;
+          }
+          const boardClassCode = matchedClass.class_code;
+
+          const subjectRes = await axiosInstance.post("/subjects/", {
+            class_id: boardClassCode,
+          });
+          const allSubjects = subjectRes.data.data || [];
+          const matchedSubject =
+            allSubjects.find(
+              (s) => s.subject_name.toLowerCase() === "mathematics",
+            ) ||
+            allSubjects.find(
+              (s) =>
+                s.subject_name.toLowerCase().includes("math") &&
+                !s.subject_name.toLowerCase().includes("jee"),
+            ) ||
+            allSubjects[0];
+          if (!matchedSubject) {
+            setIsLoading(false);
+            showAlert("No matching subject found for Self Study.", "error");
+            return;
+          }
+          const boardSubjectCode = matchedSubject.subject_code;
+
+          const chapterRes = await axiosInstance.post("/chapters/", {
+            class_id: boardClassCode,
+            subject_id: boardSubjectCode,
+          });
+          const allChapters = chapterRes.data.data || [];
+          const normalise = (s) => s.toLowerCase().replace(/[^a-z]/g, "");
+          const keyWords = (s) =>
+            s
+              .toLowerCase()
+              .replace(/[^a-z0-9 ]/g, " ")
+              .split(/\s+/)
+              .filter((w) => w.length > 3);
+          const jeeNorm = normalise(jeeChapterName);
+          const matchedChapter =
+            allChapters.find(
+              (ch) =>
+                normalise(ch.name).includes(jeeNorm) ||
+                jeeNorm.includes(normalise(ch.name)),
+            ) ||
+            allChapters.find((ch) => {
+              const boardWords = new Set(keyWords(ch.name));
+              const jeeWords = keyWords(jeeChapterName);
+              return (
+                jeeWords.filter((w) => boardWords.has(w)).length >=
+                Math.min(2, jeeWords.length)
+              );
+            });
+          if (!matchedChapter) {
+            setIsLoading(false);
+            showAlert(
+              `Chapter "${jeeChapterName}" not found in Board subjects. Please use the wizard to select manually.`,
+              "error",
+            );
+            return;
+          }
+          const boardChapterCode = matchedChapter.topic_code;
+
+          const qRes = await axiosInstance.post("/question-images/", {
+            classid: Number(boardClassCode),
+            subjectid: Number(boardSubjectCode),
+            topicid: [boardChapterCode],
+            exercise: true,
+          });
+          const results = (qRes.data?.questions || []).map((q, idx) => ({
+            ...q,
+            id: idx,
+            question_id: q.id,
+            question: q.question,
+            context: q.context || null,
+            image: q.question_image ? `${q.question_image}` : null,
+          }));
+          setSelectedClass(Number(boardClassCode));
+          setSelectedSubject(Number(boardSubjectCode));
+          setSelectedChapters([boardChapterCode]);
+          setQuestionType("exercise");
+          setQuestionList(results);
+          setSelectedQuestions([]);
+          setPaginationInfo({
+            next: qRes.data.next || null,
+            previous: qRes.data.previous || null,
+            count: qRes.data.count || results.length,
+            currentPage: 1,
+            totalPages: Math.ceil((qRes.data.count || results.length) / 15),
+            isLoading: false,
+          });
+          setShowQuestionList(true);
+          setIsLoading(false);
+        } catch (err) {
+          console.error("JEE Foundation autoFetch error:", err);
+          setIsLoading(false);
+          showAlert("Failed to load questions. Please try again.", "error");
+        }
+      })();
+
+      return;
+    }
+
+    // ── Board path (unchanged) ────────────────────────────────────────────────
+    const { classCode, subjectCode, chapterCode, subtopics } = prefillData;
 
     if (!classCode || !subjectCode || !chapterCode) return;
 
@@ -614,10 +860,6 @@ function StudentDash({ jeeMode = false }) {
     setIsLoading(true);
 
     if (hasSubtopics) {
-      // ── Step 1: resolve subtopic NAMES → subtopic CODES ──────────────────────
-      // The API needs sub_topic_code (numeric array), but boardSelection only
-      // stores human-readable sub_topic_names. We call with sub_topic_names: true
-      // first to get the full list, then match by name to extract the codes.
       axiosInstance
         .post("/backend/api/updated-subtopic-questions/", {
           classid: classCode,
@@ -627,13 +869,9 @@ function StudentDash({ jeeMode = false }) {
         })
         .then((res) => {
           const allSubtopics = res.data.subtopics || [];
-          // allSubtopics: [{ updated_sub_topic_code, updated_sub_topic_name }, ...]
-
-          // Match the stored name strings against the returned list
           const subtopicNameSet = new Set(
             subtopics.map((n) => n.toLowerCase().trim()),
           );
-
           const matchedCodes = allSubtopics
             .filter((st) =>
               subtopicNameSet.has(
@@ -641,21 +879,17 @@ function StudentDash({ jeeMode = false }) {
               ),
             )
             .map((st) => st.updated_sub_topic_code);
-
-          // If no codes matched (name mismatch), fall back to all subtopics
           const codesToUse =
             matchedCodes.length > 0
               ? matchedCodes
               : allSubtopics.map((st) => st.updated_sub_topic_code);
-
-          // ── Step 2: fetch actual questions with sub_topic_code ────────────────
           return axiosInstance.post(
             "/backend/api/updated-subtopic-questions/",
             {
               classid: classCode,
               subjectid: subjectCode,
               topicid: [chapterCode],
-              sub_topic_code: codesToUse, // ← this is what the API expects
+              sub_topic_code: codesToUse,
             },
           );
         })
@@ -669,7 +903,6 @@ function StudentDash({ jeeMode = false }) {
             context: q.context || null,
             image: q.question_image ? `${q.question_image}` : null,
           }));
-
           setSelectedClass(classCode);
           setSelectedSubject(subjectCode);
           setSelectedChapters([chapterCode]);
@@ -693,7 +926,6 @@ function StudentDash({ jeeMode = false }) {
           showAlert("Failed to load questions. Please try again.", "error");
         });
     } else {
-      // ── No subtopics: fetch all questions for the chapter via question-images ──
       axiosInstance
         .post("/question-images/", {
           classid: Number(classCode),
@@ -710,7 +942,6 @@ function StudentDash({ jeeMode = false }) {
             context: q.context || null,
             image: q.question_image ? `${q.question_image}` : null,
           }));
-
           setSelectedClass(Number(classCode));
           setSelectedSubject(Number(subjectCode));
           setSelectedChapters([chapterCode]);

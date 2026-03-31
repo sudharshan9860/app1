@@ -142,12 +142,14 @@ const QuizQuestion = () => {
           quizData,
           subject,
           boardSelection: state?.boardSelection,
-          selectedChapters: state?.selectedChapters, // ← ADD (already exists in some paths)
-          selectedSubtopics: state?.selectedSubtopics, // ← ADD THIS
+          selectedChapters: state?.selectedChapters,
+          selectedSubtopics: state?.selectedSubtopics,
           questionsPerChapter: state?.questionsPerChapter,
-          // ── NEW: pass JEE Foundation context through ──
           isJeeFoundation: state?.isJeeFoundation || false,
           jeeDifficulty: state?.jeeDifficulty || null,
+          jeeSelectedSubject: state?.jeeSelectedSubject || null,
+          jeeSelectedClass: state?.jeeSelectedClass || null,
+          jeeSelection: state?.jeeSelection || null, // ← NEW: forward Board IDs
         },
       });
     } catch (err) {

@@ -57,6 +57,22 @@ const QuizMode = () => {
   // JEE Foundation — flat string arrays (chapters come as strings, not objects)
   const [jeeClasses, setJeeClasses] = useState([]); // [6, 8, 9, 10]
   const [jeeSelectedClass, setJeeSelectedClass] = useState(null); // number
+  // JEE subject state
+  const [jeeSubjects, setJeeSubjects] = useState([]); // e.g. ["JEE_FOUNDATION_MATH", "JEE_FOUNDATION_SCIENCE"]
+  const [jeeSelectedSubject, setJeeSelectedSubject] = useState(
+    "JEE_FOUNDATION_MATH",
+  ); // default
+  const [jeeLoadingSubjects, setJeeLoadingSubjects] = useState(false);
+  // Stores the quiz-API subject string (e.g. "JEE_FOUNDATION_MATH") separately
+  // from jeeSelectedSubject which now holds the Board subject_code after the fix.
+  const [jeeSelectedSubjectQuizCode, setJeeSelectedSubjectQuizCode] =
+    useState("");
+  // Board chapter objects for JEE Foundation [{topic_code, name}]
+  const [jeeChapterObjects, setJeeChapterObjects] = useState([]);
+  // Selected chapter objects (needed for topic_code in subtopic fetch)
+  const [jeeSelectedChapterObjects, setJeeSelectedChapterObjects] = useState(
+    [],
+  );
   const [jeeChapters, setJeeChapters] = useState([]); // string[]
   const [jeeSelectedChapters, setJeeSelectedChapters] = useState([]); // string[]
   const [jeeSubtopics, setJeeSubtopics] = useState([]); // string[]
@@ -121,37 +137,93 @@ const QuizMode = () => {
   const [selectedSubtopics, setSelectedSubtopics] = useState([]); // NOW: string[] of subtopic NAMES (for generate payload)
   const [loadingSubtopics, setLoadingSubtopics] = useState(false);
 
-  // ── JEE Foundation: fetch classes on mode switch ──
+  // ── JEE Foundation: fetch classes on mode switch — Board /classes/ API ──
   useEffect(() => {
     if (quizMode !== "jee_foundation") return;
     setJeeLoadingClasses(true);
-    fetch(
-      `https://quizmode.smartlearners.ai/api/v1/classes?subject=JEE_FOUNDATION_MATH`,
-    )
-      .then((r) => r.json())
-      .then((data) => setJeeClasses(data.classes || []))
+    setJeeClasses([]);
+    setJeeSelectedClass(null);
+    setJeeSubjects([]);
+    setJeeSelectedSubject("");
+    setJeeSelectedSubjectQuizCode("");
+    setJeeChapterObjects([]);
+    setJeeChapterObjects([]);
+    setJeeChapters([]);
+    setJeeSelectedChapters([]);
+    setJeeSelectedChapterObjects([]);
+    setJeeSubtopics([]);
+    setJeeSelectedSubtopics([]);
+    axiosInstance
+      .get("/classes/")
+      .then((res) => setJeeClasses(res.data.data || []))
       .catch(() => setJeeClasses([]))
       .finally(() => setJeeLoadingClasses(false));
   }, [quizMode]);
 
-  // ── JEE Foundation: fetch chapters when class selected ──
+  // ── JEE Foundation: fetch chapters using Board POST /chapters/ ──
+  // Same API as Board mode: POST /chapters/ with { class_id, subject_id }
+  // jeeSelectedClass = Board class_code, jeeSelectedSubject = Board subject_code
+  useEffect(() => {
+    if (
+      quizMode !== "jee_foundation" ||
+      !jeeSelectedClass ||
+      !jeeSelectedSubject
+    )
+      return;
+    setJeeChapters([]);
+    setJeeChapterObjects([]);
+    setJeeSelectedChapters([]);
+    setJeeSelectedChapterObjects([]);
+    setJeeSubtopics([]);
+    setJeeSelectedSubtopics([]);
+    setJeeLoadingChapters(true);
+    axiosInstance
+      .post("/chapters/", {
+        class_id: jeeSelectedClass, // Board class_code
+        subject_id: jeeSelectedSubject, // Board subject_code
+      })
+      .then((res) => {
+        const data = res.data.data || []; // [{topic_code, name}]
+        setJeeChapterObjects(data);
+        setJeeChapters(data.map((ch) => ch.name)); // flat string[] for filter/display
+      })
+      .catch(() => {
+        setJeeChapterObjects([]);
+        setJeeChapters([]);
+      })
+      .finally(() => setJeeLoadingChapters(false));
+  }, [quizMode, jeeSelectedClass, jeeSelectedSubject]); // eslint-disable-line
+
+  // ── JEE Foundation: fetch subjects using Board POST /subjects/ + test_prep:true ──
   useEffect(() => {
     if (quizMode !== "jee_foundation" || !jeeSelectedClass) return;
+
+    // Reset downstream
+    setJeeSubjects([]);
+    setJeeSelectedSubject("");
+    setJeeSelectedSubjectQuizCode("");
     setJeeChapters([]);
     setJeeSelectedChapters([]);
     setJeeSubtopics([]);
     setJeeSelectedSubtopics([]);
-    setJeeLoadingChapters(true);
-    fetch(
-      `https://quizmode.smartlearners.ai/api/v1/classes/${jeeSelectedClass}/chapters?subject=JEE_FOUNDATION_MATH`,
-    )
-      .then((r) => r.json())
-      .then((data) => setJeeChapters(data.chapters || []))
-      .catch(() => setJeeChapters([]))
-      .finally(() => setJeeLoadingChapters(false));
-  }, [quizMode, jeeSelectedClass]);
+    setJeeLoadingSubjects(true);
 
-  // ── JEE Foundation: fetch subtopics when exactly 1 chapter selected ──
+    axiosInstance
+      .post("/subjects/", {
+        class_id: jeeSelectedClass, // Board class_code
+        test_prep: true, // returns only JEE Foundation subjects
+      })
+      .then((res) => {
+        const subs = res.data.data || [];
+        setJeeSubjects(subs);
+        // No auto-select — user must click a subject chip
+      })
+      .catch(() => setJeeSubjects([]))
+      .finally(() => setJeeLoadingSubjects(false));
+  }, [quizMode, jeeSelectedClass]); // eslint-disable-line
+
+  // ── JEE Foundation: fetch subtopics using Board POST /backend/api/updated-subtopic-questions/ ──
+  // Same API as Board mode. Fires only when exactly 1 chapter is selected.
   useEffect(() => {
     if (quizMode !== "jee_foundation") return;
     if (jeeSelectedChapters.length !== 1) {
@@ -159,16 +231,28 @@ const QuizMode = () => {
       setJeeSelectedSubtopics([]);
       return;
     }
-    const chapter = encodeURIComponent(jeeSelectedChapters[0]);
+    // Find the chapter object to get its topic_code
+    const selectedChObj = jeeChapterObjects.find(
+      (ch) => ch.name === jeeSelectedChapters[0],
+    );
+    if (!selectedChObj) return;
+
     setJeeLoadingSubtopics(true);
-    fetch(
-      `https://quizmode.smartlearners.ai/api/v1/classes/${jeeSelectedClass}/chapters/${chapter}/subtopics?subject=JEE_FOUNDATION_MATH`,
-    )
-      .then((r) => r.json())
-      .then((data) => setJeeSubtopics(data.sub_topics || []))
+    axiosInstance
+      .post("/backend/api/updated-subtopic-questions/", {
+        classid: jeeSelectedClass, // Board class_code
+        subjectid: jeeSelectedSubject, // Board subject_code
+        topicid: [selectedChObj.topic_code],
+        sub_topic_names: true,
+      })
+      .then((res) => {
+        const subs = res.data.subtopics || [];
+        // Store flat string[] of subtopic names (consistent with existing jeeSubtopics usage)
+        setJeeSubtopics(subs.map((s) => s.updated_sub_topic_name));
+      })
       .catch(() => setJeeSubtopics([]))
       .finally(() => setJeeLoadingSubtopics(false));
-  }, [quizMode, jeeSelectedClass, jeeSelectedChapters]);
+  }, [quizMode, jeeSelectedClass, jeeSelectedChapters]); // eslint-disable-line
 
   useEffect(() => {
     const loadClasses = async () => {
@@ -394,9 +478,11 @@ const QuizMode = () => {
 
   const jeeCurrentStep = !jeeSelectedClass
     ? 1
-    : jeeSelectedChapters.length === 0
+    : !jeeSelectedSubject
       ? 2
-      : 3;
+      : jeeSelectedChapters.length === 0
+        ? 3
+        : 4;
 
   const totalQuestions = selectedChapters.length * questionsPerChapter;
   const estimatedTime = totalQuestions * 2; // 2 min per question
@@ -616,11 +702,21 @@ const QuizMode = () => {
     setGenerating(true);
     setError("");
     try {
+      // Extract numeric class number — quiz API expects a number, not a Board class_code string
+      const classNum =
+        Number(String(jeeSelectedClass).replace(/\D/g, "")) ||
+        Number(jeeSelectedClass);
+
+      // Format chapter names for quiz API (strips CHAPTER_N_ prefix, title-cases)
+      const formattedChapters = jeeSelectedChapters.map((ch) =>
+        formatChapterName(ch),
+      );
+
       const payload = {
-        class_num: jeeSelectedClass,
-        chapters: jeeSelectedChapters,
+        class_num: classNum, // numeric e.g. 8
+        chapters: formattedChapters,
         questions_per_chapter: questionsPerChapter,
-        subject: "JEE_FOUNDATION_MATH",
+        subject: jeeSelectedSubjectQuizCode, // quiz-API string e.g. "JEE_FOUNDATION_MATH"
         ...(jeeDifficulty && { difficulty_level: jeeDifficulty }),
         ...(jeeSelectedSubtopics.length > 0 && {
           sub_topics: jeeSelectedSubtopics,
@@ -628,18 +724,36 @@ const QuizMode = () => {
       };
 
       const res = await generateQuestions(payload);
+
+      // Build jeeSelection with exact Board IDs for self-study prefill.
+      // jeeSelectedClass = Board class_code, jeeSelectedSubject = Board subject_code.
+      // jeeSelectedChapterObjects[0].topic_code = Board chapter topic_code.
+      const firstChapterObj =
+        jeeSelectedChapterObjects[0] ||
+        jeeChapterObjects.find((ch) => ch.name === jeeSelectedChapters[0]);
+
+      const jeeSelection = {
+        classCode: jeeSelectedClass, // Board class_code e.g. "10"
+        subjectCode: jeeSelectedSubject, // Board subject_code e.g. "6"
+        subjectName: jeeSelectedSubjectQuizCode, // quiz subject name e.g. "JEE_MATHEMATICS_FOUNDATION"
+        chapterCode: firstChapterObj?.topic_code || null, // Board topic_code e.g. "5"
+        chapterName: formattedChapters[0] || "", // formatted name e.g. "Matrices and Determinants"
+        subtopics: jeeSelectedSubtopics || [], // selected subtopic names
+      };
+
       navigate("/quiz-question", {
         state: {
           quizData: res.data,
-          classNum: jeeSelectedClass,
-          selectedChapters: jeeSelectedChapters,
+          classNum: classNum,
+          selectedChapters: formattedChapters,
           questionsPerChapter,
-          subject: "JEE_FOUNDATION_MATH",
+          subject: jeeSelectedSubjectQuizCode,
           selectedSubtopics: jeeSelectedSubtopics,
-          // JEE Foundation context for result screen
           isJeeFoundation: true,
-          jeeDifficulty: jeeDifficulty, // current level played
-          // no boardSelection — no self study prefill for JEE Foundation
+          jeeDifficulty: jeeDifficulty,
+          jeeSelectedSubject: jeeSelectedSubjectQuizCode,
+          jeeSelectedClass: classNum,
+          jeeSelection, // ← NEW: Board IDs for self-study
         },
       });
     } catch (err) {
@@ -671,11 +785,19 @@ const QuizMode = () => {
     );
   }, [selectedChapters, prevQuizzes]);
 
+  // The quiz API subject string = the Board subject_name exactly.
+  // e.g. "JEE_MATHEMATICS_FOUNDATION" → send "JEE_MATHEMATICS_FOUNDATION"
+  const deriveQuizSubjectCode = (subjectName = "") => subjectName;
+
   // ── JEE filtered chapters for search ──
   const jeeFilteredChapters = useMemo(() => {
     if (!jeeChapterFilter.trim()) return jeeChapters;
     const q = jeeChapterFilter.toLowerCase();
-    return jeeChapters.filter((ch) => ch.toLowerCase().includes(q));
+    return jeeChapters.filter(
+      (ch) =>
+        formatChapterName(ch).toLowerCase().includes(q) ||
+        ch.toLowerCase().includes(q),
+    );
   }, [jeeChapters, jeeChapterFilter]);
 
   return (
@@ -720,7 +842,7 @@ const QuizMode = () => {
                 className={quizMode === "jee_foundation" ? "active" : ""}
                 onClick={() => setQuizMode("jee_foundation")}
               >
-                🏆 JEE Foundation
+                🏆 JEE
               </button>
             </div>
           </div>
@@ -1147,8 +1269,9 @@ const QuizMode = () => {
               <div className="quiz-steps">
                 {[
                   { num: 1, label: "Class", desc: "Select class" },
-                  { num: 2, label: "Chapter", desc: "Pick a topic" },
-                  { num: 3, label: "Difficulty", desc: "Choose level" },
+                  { num: 2, label: "Subject", desc: "Pick subject" },
+                  { num: 3, label: "Chapter", desc: "Pick a topic" },
+                  { num: 4, label: "Difficulty", desc: "Choose level" },
                 ].map((step, i) => (
                   <React.Fragment key={step.num}>
                     {i > 0 && (
@@ -1214,21 +1337,80 @@ const QuizMode = () => {
                     <div className="jee-class-grid">
                       {jeeClasses.map((cls) => (
                         <motion.button
-                          key={cls}
-                          className={`jee-class-chip ${jeeSelectedClass === cls ? "selected" : ""}`}
-                          onClick={() => setJeeSelectedClass(cls)}
+                          key={cls.class_code}
+                          className={`jee-class-chip ${jeeSelectedClass === cls.class_code ? "selected" : ""}`}
+                          onClick={() => setJeeSelectedClass(cls.class_code)}
                           whileTap={{ scale: 0.96 }}
                         >
-                          Class {cls}
+                          {cls.class_name}
                         </motion.button>
                       ))}
                     </div>
                   )}
                 </div>
 
-                {/* ── Step 2: Chapter ── */}
+                {/* ── Step 2: Subject ── */}
                 <AnimatePresence>
                   {jeeSelectedClass && (
+                    <motion.div
+                      className="quiz-glass-card"
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -12 }}
+                      transition={{ duration: 0.35 }}
+                    >
+                      <div className="quiz-section-label">
+                        <span className="quiz-section-num">2</span>
+                        <span>Select Subject</span>
+                      </div>
+                      {jeeLoadingSubjects ? (
+                        <div
+                          className="quiz-spinner"
+                          style={{ width: 20, height: 20 }}
+                        />
+                      ) : (
+                        <div className="quiz-chip-row">
+                          {jeeSubjects.map((sub) => {
+                            const isSel =
+                              jeeSelectedSubject === sub.subject_code;
+                            return (
+                              <motion.button
+                                key={sub.subject_code}
+                                className={`quiz-chip ${isSel ? "selected" : ""}`}
+                                onClick={() => {
+                                  setJeeSelectedSubject(sub.subject_code);
+                                  setJeeSelectedSubjectQuizCode(
+                                    sub.subject_name,
+                                  );
+                                  setJeeChapterObjects([]);
+                                  setJeeChapters([]);
+                                  setJeeSelectedChapters([]);
+                                  setJeeSelectedChapterObjects([]);
+                                  setJeeSelectedSubtopics([]);
+                                  setJeeDifficulty(null);
+                                }}
+                                whileTap={{ scale: 0.97 }}
+                              >
+                                <span
+                                  className={`quiz-chip-check ${isSel ? "visible" : ""}`}
+                                >
+                                  ✓
+                                </span>
+                                <span className="quiz-chip-text">
+                                  {sub.subject_name}
+                                </span>
+                              </motion.button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* ── Step 3: Chapter ── */}
+                <AnimatePresence>
+                  {jeeSelectedClass && jeeSelectedSubject && (
                     <motion.div
                       className="quiz-glass-card"
                       initial={{ opacity: 0, y: 12 }}
@@ -1267,15 +1449,20 @@ const QuizMode = () => {
                               <motion.button
                                 key={ch}
                                 className={`quiz-chapter-chip ${isSelected ? "selected" : ""}`}
-                                onClick={() =>
-                                  setJeeSelectedChapters(
-                                    isSelected
-                                      ? jeeSelectedChapters.filter(
-                                          (c) => c !== ch,
-                                        )
-                                      : [...jeeSelectedChapters, ch],
-                                  )
-                                }
+                                onClick={() => {
+                                  const newSelected = isSelected
+                                    ? jeeSelectedChapters.filter(
+                                        (c) => c !== ch,
+                                      )
+                                    : [...jeeSelectedChapters, ch];
+                                  setJeeSelectedChapters(newSelected);
+                                  setJeeSelectedChapterObjects(
+                                    jeeChapterObjects.filter((obj) =>
+                                      newSelected.includes(obj.name),
+                                    ),
+                                  );
+                                  setJeeSelectedSubtopics([]);
+                                }}
                                 whileTap={{ scale: 0.97 }}
                               >
                                 <span
@@ -1283,7 +1470,9 @@ const QuizMode = () => {
                                 >
                                   ✓
                                 </span>
-                                <span className="quiz-chip-text">{ch}</span>
+                                <span className="quiz-chip-text">
+                                  {formatChapterName(ch)}
+                                </span>
                               </motion.button>
                             );
                           })}
@@ -1364,7 +1553,7 @@ const QuizMode = () => {
                   )}
                 </AnimatePresence>
 
-                {/* ── Step 3: Difficulty Level + Start ── */}
+                {/* ── Step 4: Difficulty Level + Start ── */}
                 <AnimatePresence>
                   {jeeSelectedChapters.length > 0 && (
                     <motion.div

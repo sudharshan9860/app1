@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axiosInstance from "../api/axiosInstance";
+import useDirectUpload from "./Usedirectupload";
 import AlertBox from "./AlertBox";
 import {
   FileText,
@@ -65,7 +66,22 @@ const ExamCorrection = () => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const [processingStatus, setProcessingStatus] = useState("Ready to process");
-  const [uploadProgress, setUploadProgress] = useState(0);
+
+  // Direct upload hook (presigned URLs)
+  const {
+    uploadMultipleFiles,
+    uploadSingleFile,
+    uploadProgress,
+    currentFileIndex,
+    totalFiles,
+    uploading: directUploading,
+  } = useDirectUpload();
+
+  // Auto-upload state: files upload to cloud immediately on selection
+  const [questionPaperUrl, setQuestionPaperUrl] = useState(null);
+  const [answerSheetUrls, setAnswerSheetUrls] = useState([]);
+  const [qpUploading, setQpUploading] = useState(false);
+  const [asUploading, setAsUploading] = useState(false);
 
   // Existing exam names for validation
   const [existingExamNames, setExistingExamNames] = useState([]);
@@ -212,23 +228,46 @@ const ExamCorrection = () => {
     setError(null);
   };
 
-  const handleQuestionPaperChange = (e) => {
+  const handleQuestionPaperChange = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      if (file.type !== "application/pdf") {
-        setError("Question paper must be a PDF file");
-        return;
-      }
-      if (file.size > 500 * 1024 * 1024) {
-        setError("Question paper file size must be less than 100MB");
-        return;
-      }
-      setQuestionPaper(file);
-      setError(null);
+    if (!file) return;
+
+    if (file.type !== "application/pdf") {
+      setError("Question paper must be a PDF file");
+      return;
+    }
+    if (file.size > 500 * 1024 * 1024) {
+      setError("Question paper file size must be less than 500MB");
+      return;
+    }
+
+    setQuestionPaper(file);
+    setQuestionPaperUrl(null);
+    setError(null);
+
+    // Auto-upload immediately via presigned URL
+    try {
+      setQpUploading(true);
+      const metadata = {
+        teacher_name: teacherName,
+        section_name: section.trim(),
+        exam_name: examName.trim(),
+      };
+      const url = await uploadSingleFile(file, "question_paper", metadata, (percent) => {
+        console.log(`Question paper upload: ${percent}%`);
+      });
+      setQuestionPaperUrl(url);
+    } catch (err) {
+      console.error("Error auto-uploading question paper:", err);
+      setError("Failed to upload question paper to cloud. Please try again.");
+      setQuestionPaper(null);
+      setQuestionPaperUrl(null);
+    } finally {
+      setQpUploading(false);
     }
   };
 
-  const handleAnswerSheetsChange = (e) => {
+  const handleAnswerSheetsChange = async (e) => {
     const files = Array.from(e.target.files);
     const invalidFiles = files.filter((file) => {
       return file.type !== "application/pdf" || file.size > 100 * 1024 * 1024;
@@ -239,27 +278,56 @@ const ExamCorrection = () => {
       return;
     }
 
-    setAnswerSheets((prev) => {
-      const existingNames = new Set(prev.map((f) => f.name));
-      const newFiles = files
-        .map((f) => prefixStudentName(f))
-        .filter((f) => !existingNames.has(f.name));
-      return [...prev, ...newFiles];
-    });
+    // Prefix and deduplicate
+    const existingNames = new Set(answerSheets.map((f) => f.name));
+    const newFiles = files
+      .map((f) => prefixStudentName(f))
+      .filter((f) => !existingNames.has(f.name));
+
+    if (newFiles.length === 0) {
+      e.target.value = "";
+      return;
+    }
+
+    // Add new files to state immediately
+    setAnswerSheets((prev) => [...prev, ...newFiles]);
     setError(null);
     e.target.value = "";
+
+    // Auto-upload the new files immediately via presigned URLs
+    try {
+      setAsUploading(true);
+      const metadata = {
+        teacher_name: teacherName,
+        section_name: section.trim(),
+        exam_name: examName.trim(),
+      };
+      const urls = await uploadMultipleFiles(newFiles, "answer_sheet", metadata);
+      setAnswerSheetUrls((prev) => [...prev, ...urls]);
+    } catch (err) {
+      console.error("Error auto-uploading answer sheets:", err);
+      setError("Failed to upload answer sheets to cloud. Please try again.");
+      // Remove the failed files from state
+      const failedNames = new Set(newFiles.map((f) => f.name));
+      setAnswerSheets((prev) => prev.filter((f) => !failedNames.has(f.name)));
+    } finally {
+      setAsUploading(false);
+    }
   };
 
   const handleRemoveQuestionPaper = () => {
     setQuestionPaper(null);
+    setQuestionPaperUrl(null);
   };
 
   const handleRemoveAnswerSheet = (index) => {
     setAnswerSheets((prev) => prev.filter((_, i) => i !== index));
+    setAnswerSheetUrls((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleClearAllAnswerSheets = () => {
     setAnswerSheets([]);
+    setAnswerSheetUrls([]);
   };
 
   const handleSubmit = async (e) => {
@@ -277,11 +345,11 @@ const ExamCorrection = () => {
       setError("Please enter class name");
       return;
     }
-    if (correctionMode === "new" && !questionPaper) {
+    if (correctionMode === "new" && !questionPaperUrl) {
       setError("Please upload question paper");
       return;
     }
-    if (answerSheets.length === 0) {
+    if (answerSheets.length === 0 || answerSheetUrls.length === 0) {
       setError("Please upload at least one answer sheet");
       return;
     }
@@ -290,46 +358,35 @@ const ExamCorrection = () => {
       setLoading(true);
       setError(null);
       setSuccess(false);
-      setProcessingStatus("Uploading files...");
-      setUploadProgress(0);
+      setProcessingStatus("Starting exam processing...");
 
-      const formData = new FormData();
-      formData.append("exam_name", examName.trim());
-      formData.append("exam_type", examType);
-      formData.append("teacher_name", teacherName);
-      formData.append("class_name", className.trim());
-      formData.append("section", section.trim());
-      formData.append("subject", subject);
-      formData.append("roll_number_pattern", rollNumberPattern);
-      formData.append("max_workers", maxWorkers.toString());
-      formData.append("upload_mode", uploadMode);
-
-      if (correctionMode === "existing" && selectedExistingExam) {
-        formData.append("exam_id", selectedExistingExam.id.toString());
-        formData.append("is_additional_correction", "true");
-      }
-
-      if (questionPaper) {
-        formData.append("question_paper", questionPaper);
-      }
-
-      answerSheets.forEach((sheet) => {
-        formData.append("answer_sheets", sheet);
-      });
-
+      // Files already uploaded to cloud — just send URLs to backend
       const apiEndpoint =
         uploadMode === "group"
-          ? "api/exam-correction-group/"
-          : "api/exam-correction/";
+          ? "api/exam-correction-group-url-update/"
+          : "api/exam-correction-url-update/";
 
-      const response = await axiosInstance.post(apiEndpoint, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-        onUploadProgress: (progressEvent) => {
-          const percentCompleted = Math.round(
-            (progressEvent.loaded * 100) / progressEvent.total,
-          );
-          setUploadProgress(percentCompleted);
-        },
+      const payload = {
+        exam_name: examName.trim(),
+        exam_type: examType,
+        teacher_name: teacherName,
+        class_name: className.trim(),
+        section: section.trim(),
+        subject: subject,
+        roll_number_pattern: rollNumberPattern,
+        max_workers: maxWorkers,
+        upload_mode: uploadMode,
+        question_paper_urls: questionPaperUrl ? [questionPaperUrl] : [],
+        answer_sheet_urls: answerSheetUrls,
+      };
+
+      if (correctionMode === "existing" && selectedExistingExam) {
+        payload.exam_id = selectedExistingExam.id;
+        payload.is_additional_correction = true;
+      }
+
+      const response = await axiosInstance.post(apiEndpoint, payload, {
+        headers: { "Content-Type": "application/json" },
       });
 
       setSuccess(true);
@@ -353,6 +410,8 @@ const ExamCorrection = () => {
       setMaxWorkers(5);
       setQuestionPaper(null);
       setAnswerSheets([]);
+      setQuestionPaperUrl(null);
+      setAnswerSheetUrls([]);
       setUploadMode("individual");
     } catch (error) {
       console.error("Error submitting exam correction:", error);
@@ -364,7 +423,6 @@ const ExamCorrection = () => {
       setProcessingStatus("Ready to process");
     } finally {
       setLoading(false);
-      setUploadProgress(0);
     }
   };
 
@@ -378,6 +436,10 @@ const ExamCorrection = () => {
     setMaxWorkers(5);
     setQuestionPaper(null);
     setAnswerSheets([]);
+    setQuestionPaperUrl(null);
+    setAnswerSheetUrls([]);
+    setQpUploading(false);
+    setAsUploading(false);
     setError(null);
     setSuccess(false);
     setProcessingStatus("Ready to process");
@@ -949,13 +1011,15 @@ const ExamCorrection = () => {
                       <p className="text-sm font-medium text-[#0B1120] truncate">{questionPaper.name}</p>
                       <p className="text-xs text-gray-400">
                         {(questionPaper.size / 1024 / 1024).toFixed(2)} MB
+                        {qpUploading && <span className="text-[#f59e0b] ml-1">— Uploading...</span>}
+                        {questionPaperUrl && <span className="text-[#10b981] ml-1">— Uploaded</span>}
                       </p>
                     </div>
                     <button
                       type="button"
                       className="w-7 h-7 rounded-full bg-red-50 text-[#ef4444] flex items-center justify-center hover:bg-red-100 transition-colors"
                       onClick={handleRemoveQuestionPaper}
-                      disabled={loading}
+                      disabled={loading || qpUploading}
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -1010,13 +1074,17 @@ const ExamCorrection = () => {
                             <p className="text-xs font-medium text-[#0B1120] truncate">{sheet.name}</p>
                             <p className="text-xs text-gray-400">
                               {(sheet.size / 1024 / 1024).toFixed(2)} MB
+                              {answerSheetUrls[index]
+                                ? <span className="text-[#10b981] ml-1">— Uploaded</span>
+                                : (asUploading && <span className="text-[#f59e0b] ml-1">— Uploading...</span>)
+                              }
                             </p>
                           </div>
                           <button
                             type="button"
                             className="w-6 h-6 rounded-full bg-red-50 text-[#ef4444] flex items-center justify-center hover:bg-red-100 transition-colors flex-shrink-0"
                             onClick={() => handleRemoveAnswerSheet(index)}
-                            disabled={loading}
+                            disabled={loading || asUploading}
                           >
                             <X className="w-3 h-3" />
                           </button>
@@ -1036,7 +1104,7 @@ const ExamCorrection = () => {
                           accept=".pdf"
                           multiple
                           onChange={handleAnswerSheetsChange}
-                          disabled={loading}
+                          disabled={loading || asUploading}
                           className="hidden"
                         />
                       </label>
@@ -1044,7 +1112,7 @@ const ExamCorrection = () => {
                         type="button"
                         className="text-sm text-[#ef4444] hover:text-red-600"
                         onClick={handleClearAllAnswerSheets}
-                        disabled={loading}
+                        disabled={loading || asUploading}
                       >
                         Clear All
                       </button>
@@ -1055,18 +1123,33 @@ const ExamCorrection = () => {
             </div>
           </div>
 
-          {/* Upload Progress */}
-          {loading && uploadProgress > 0 && (
+          {/* Auto-Upload Progress (shown during file selection upload) */}
+          {(qpUploading || asUploading || directUploading) && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
               <div className="flex items-center justify-between text-sm mb-2">
-                <span className="text-[#0B1120] font-medium">Uploading...</span>
-                <span className="text-[#00A0E3] font-bold">{uploadProgress}%</span>
+                <span className="text-[#0B1120] font-medium">
+                  {qpUploading && "Uploading question paper..."}
+                  {asUploading && `Uploading answer sheets (${currentFileIndex + 1} of ${totalFiles})...`}
+                </span>
+                {directUploading && <span className="text-[#00A0E3] font-bold">{uploadProgress}%</span>}
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="h-2 rounded-full bg-[#00A0E3] transition-all"
-                  style={{ width: `${uploadProgress}%` }}
-                />
+              {directUploading && (
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="h-2 rounded-full bg-[#00A0E3] transition-all"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Submit Processing Status */}
+          {loading && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <div className="flex items-center gap-2 text-sm text-[#0B1120] font-medium">
+                <Loader2 className="w-4 h-4 text-[#00A0E3] animate-spin" />
+                {processingStatus}
               </div>
             </div>
           )}
@@ -1109,7 +1192,7 @@ const ExamCorrection = () => {
             <button
               type="submit"
               className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-[#00A0E3] hover:bg-[#0080B8] text-white font-medium text-sm transition-colors disabled:opacity-50"
-              disabled={loading || answerSheets.length === 0 || isExamNameDuplicate}
+              disabled={loading || answerSheetUrls.length === 0 || qpUploading || asUploading || isExamNameDuplicate || (answerSheetUrls.length !== answerSheets.length)}
             >
               {loading ? (
                 <>

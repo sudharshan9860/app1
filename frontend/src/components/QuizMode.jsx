@@ -1359,24 +1359,41 @@ const QuizMode = () => {
                       exit={{ opacity: 0, y: -12 }}
                       transition={{ duration: 0.35 }}
                     >
-                      <div className="quiz-section-label">
-                        <span className="quiz-section-num">2</span>
-                        <span>Select Subject</span>
+                    <div className="quiz-section-label">
+                        <span className="quiz-section-num">3</span>
+                        <span>Select Chapter</span>
+                        {jeeSelectedChapters.length === 1 && (
+                          <span className="quiz-section-count">1 selected</span>
+                        )}
                       </div>
-                      {jeeLoadingSubjects ? (
-                        <div
-                          className="quiz-spinner"
-                          style={{ width: 20, height: 20 }}
-                        />
+                  {jeeLoadingSubjects ? (
+                        <div className="quiz-empty-state">
+                          <div
+                            className="quiz-spinner"
+                            style={{ margin: "0 auto", width: 32, height: 32 }}
+                          />
+                        </div>
                       ) : (
-                        <div className="quiz-chip-row">
+                        <div className="quiz-subject-grid">
                           {jeeSubjects.map((sub) => {
                             const isSel =
                               jeeSelectedSubject === sub.subject_code;
+                            const name = sub.subject_name.toUpperCase();
+                            const icon = name.includes("SCIENCE")
+                              ? "🔬"
+                              : name.includes("PHYSICS")
+                                ? "⚛️"
+                                : name.includes("CHEMISTRY")
+                                  ? "🧪"
+                                  : "📐";
+                            const displayName = sub.subject_name
+                              .replace(/_/g, " ")
+                              .toLowerCase()
+                              .replace(/\b\w/g, (c) => c.toUpperCase());
                             return (
                               <motion.button
                                 key={sub.subject_code}
-                                className={`quiz-chip ${isSel ? "selected" : ""}`}
+                                className={`quiz-subject-chip ${isSel ? "selected" : ""}`}
                                 onClick={() => {
                                   setJeeSelectedSubject(sub.subject_code);
                                   setJeeSelectedSubjectQuizCode(
@@ -1391,14 +1408,8 @@ const QuizMode = () => {
                                 }}
                                 whileTap={{ scale: 0.97 }}
                               >
-                                <span
-                                  className={`quiz-chip-check ${isSel ? "visible" : ""}`}
-                                >
-                                  ✓
-                                </span>
-                                <span className="quiz-chip-text">
-                                  {sub.subject_name}
-                                </span>
+                                <span className="quiz-subject-icon">{icon}</span>
+                                <span>{displayName}</span>
                               </motion.button>
                             );
                           })}
@@ -1418,12 +1429,10 @@ const QuizMode = () => {
                       exit={{ opacity: 0, y: -12 }}
                     >
                       <div className="quiz-section-label">
-                        <span className="quiz-section-num">2</span>
+                        <span className="quiz-section-num">3</span>
                         <span>Select Chapter</span>
-                        {jeeSelectedChapters.length > 0 && (
-                          <span className="quiz-section-count">
-                            {jeeSelectedChapters.length} selected
-                          </span>
+                        {jeeSelectedChapters.length === 1 && (
+                          <span className="quiz-section-count">1 selected</span>
                         )}
                       </div>
                       <div className="quiz-chapter-search">
@@ -1444,17 +1453,15 @@ const QuizMode = () => {
                       ) : (
                         <div className="quiz-chapter-grid">
                           {jeeFilteredChapters.map((ch) => {
-                            const isSelected = jeeSelectedChapters.includes(ch);
+                            const isSelected =
+                              jeeSelectedChapters.length === 1 &&
+                              jeeSelectedChapters[0] === ch;
                             return (
                               <motion.button
                                 key={ch}
                                 className={`quiz-chapter-chip ${isSelected ? "selected" : ""}`}
                                 onClick={() => {
-                                  const newSelected = isSelected
-                                    ? jeeSelectedChapters.filter(
-                                        (c) => c !== ch,
-                                      )
-                                    : [...jeeSelectedChapters, ch];
+                                  const newSelected = isSelected ? [] : [ch];
                                   setJeeSelectedChapters(newSelected);
                                   setJeeSelectedChapterObjects(
                                     jeeChapterObjects.filter((obj) =>
@@ -1466,10 +1473,8 @@ const QuizMode = () => {
                                 whileTap={{ scale: 0.97 }}
                               >
                                 <span
-                                  className={`quiz-chip-check ${isSelected ? "visible" : ""}`}
-                                >
-                                  ✓
-                                </span>
+                                  className={`quiz-chip-radio ${isSelected ? "visible" : ""}`}
+                                />
                                 <span className="quiz-chip-text">
                                   {formatChapterName(ch)}
                                 </span>
@@ -1564,7 +1569,7 @@ const QuizMode = () => {
                       transition={{ duration: 0.35, delay: 0.05 }}
                     >
                       <div className="quiz-section-label">
-                        <span className="quiz-section-num">3</span>
+                        <span className="quiz-section-num">4</span>
                         <span>Select Difficulty Level</span>
                       </div>
                       <div className="jee-difficulty-grid">
